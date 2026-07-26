@@ -1,0 +1,9 @@
+# Document extraction
+pdfplumber>=0.11.0      # PDF text, keeps layout better than pypdf for resumes
+python-docx>=1.1.0      # .docx read and write
+
+# Config
+PyYAML>=6.0
+
+# HTTP for the job board APIs. gh CLI handles GitHub, so no auth libs needed.
+requests>=2.32.0

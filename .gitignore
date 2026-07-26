@@ -1,0 +1,28 @@
+# Personal data. Never commit any of this.
+#
+# Note the trailing /* rather than /. Git does not descend into an excluded
+# directory, so "profile/" would make the negations below unreachable and the
+# example files would never be committed.
+profile/*
+data/*
+.env
+
+# Templates that are safe to publish.
+!profile/*.example.yaml
+!profile/*.example.md
+!profile/README.md
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

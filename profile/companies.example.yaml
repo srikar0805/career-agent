@@ -1,0 +1,31 @@
+# Company watchlist for scripts/discover.py
+#
+# Copy to companies.yaml and edit. Your entries are merged on top of the
+# defaults in discover.py and are fetched first.
+#
+# The token is the company's slug on their applicant tracking system. Find it
+# in the URL of their careers page:
+#
+#   boards.greenhouse.io/TOKEN            -> greenhouse
+#   jobs.lever.co/TOKEN                   -> lever
+#   jobs.ashbyhq.com/TOKEN                -> ashby
+#
+# A company you would genuinely want to work at, that has no opening today, is
+# still worth listing. Running discover.py weekly against the watchlist is how
+# you catch a role in its first days, before several hundred people have
+# applied to it.
+
+boards:
+  greenhouse:
+    - stripe
+    - databricks
+    - figma
+
+  lever:
+    - netflix
+    - shopify
+
+  ashby:
+    - openai
+    - vercel
+    - linear

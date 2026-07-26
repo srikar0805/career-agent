@@ -194,11 +194,12 @@ def external_prs(user: str, limit: int = 100) -> list[dict]:
     return out
 
 
-def scan_local(root: Path) -> dict[str, dict]:
+def scan_local(root: Path, identities: set[str] | None = None) -> dict[str, dict]:
     """What the API cannot see: real project structure.
 
     Keyed by lowercased repo name so it can be joined against the API results.
     """
+    identities = identities or set()
     found: dict[str, dict] = {}
     if not root.exists():
         return found
@@ -228,10 +229,15 @@ def scan_local(root: Path) -> dict[str, dict]:
         has_tests = any((d / t).is_dir() for t in TEST_DIRS) or bool(list(d.glob("**/test_*.py"))[:1])
         has_ci = any((d / c).exists() for c in CI_PATHS)
 
-        n_commits = _git(d, "rev-list", "--count", "HEAD")
-        first = _git(d, "log", "--reverse", "--format=%aI", "--max-count=1")
-        last = _git(d, "log", "-1", "--format=%aI")
-        contributors = _git(d, "shortlog", "-sn", "--all", "--no-merges")
+        total = _git(d, "rev-list", "--count", "HEAD")
+        total_n = int(total) if total and total.isdigit() else None
+
+        # Commits authored BY THIS USER, not commits in the repo. A cloned or
+        # forked open source project has thousands of commits by other people,
+        # and counting them as the user's work manufactures a resume claim they
+        # cannot defend for even one interview question. This distinction is
+        # the whole reason the field exists.
+        mine, top_author, others = _authored_by_user(d, identities)
 
         found[name] = {
             "local_path": str(d),
@@ -239,13 +245,73 @@ def scan_local(root: Path) -> dict[str, dict]:
             "dependencies": sorted(set(deps))[:60],
             "has_tests": has_tests,
             "has_ci": has_ci,
-            "local_commits": int(n_commits) if n_commits and n_commits.isdigit() else None,
-            "first_commit": first or None,
-            "last_commit": last or None,
-            "contributor_count": len([l for l in (contributors or "").splitlines() if l.strip()]),
+            "total_commits": total_n,
+            "my_commits": mine,
+            "top_author": top_author,
+            "contributor_count": others,
+            # A repo where the user wrote a small fraction of the history is
+            # somebody else's project sitting on their disk.
+            "likely_not_mine": bool(total_n and mine is not None
+                                    and total_n > 20 and mine / total_n < 0.20),
+            "first_commit": _git(d, "log", "--reverse", "--format=%aI", "--max-count=1") or None,
+            "last_commit": _git(d, "log", "-1", "--format=%aI") or None,
             "source_files": _count_source(d),
         }
     return found
+
+
+def _authored_by_user(repo: Path, identities: set[str]) -> tuple[int | None, str | None, int]:
+    """Count commits authored by the user, plus who actually owns the history."""
+    shortlog = _git(repo, "shortlog", "-sne", "--all", "--no-merges")
+    if not shortlog:
+        return None, None, 0
+
+    rows: list[tuple[int, str]] = []
+    for line in shortlog.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        count, _, who = line.partition("\t")
+        try:
+            rows.append((int(count.strip()), who.strip()))
+        except ValueError:
+            continue
+
+    if not rows:
+        return None, None, 0
+
+    mine = 0
+    for count, who in rows:
+        low = who.lower()
+        if any(ident and ident in low for ident in identities):
+            mine += count
+
+    rows.sort(reverse=True)
+    return mine, rows[0][1], len(rows)
+
+
+def user_identities(login: str) -> set[str]:
+    """Strings that identify the user in a git author line.
+
+    Git author identity is whatever was configured at commit time, which is
+    routinely a different email than the GitHub account. Matching on several
+    signals avoids undercounting the user's own work.
+    """
+    idents = {login.lower()}
+    for key in ("user.email", "user.name"):
+        try:
+            v = subprocess.run(["git", "config", "--global", key],
+                               capture_output=True, text=True, timeout=10)
+            if v.returncode == 0 and v.stdout.strip():
+                idents.add(v.stdout.strip().lower())
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+    try:
+        emails = gh("api", "user/emails", "--jq", ".[].email", parse=False)
+        idents.update(e.strip().lower() for e in emails.splitlines() if e.strip())
+    except GhError:
+        pass  # user:email scope not granted, the other signals still work
+    return {i for i in idents if i}
 
 
 def _git(repo: Path, *args: str) -> str | None:
@@ -310,7 +376,8 @@ def collect(user: str | None, local_root: Path | None, limit: int,
         if before != len(repos):
             print(f"  {before - len(repos)} filtered as forks or scratch repos", file=sys.stderr)
 
-    local = scan_local(local_root) if local_root else {}
+    identities = user_identities(user)
+    local = scan_local(local_root, identities) if local_root else {}
     if local:
         print(f"  {len(local)} local clones scanned", file=sys.stderr)
 
@@ -338,12 +405,18 @@ def collect(user: str | None, local_root: Path | None, limit: int,
     print(file=sys.stderr)
 
     # Substance first: sustained commit history beats a starred one-off.
-    enriched.sort(key=lambda r: (
-        (r.get("commits") or {}).get("count", 0) * 2
-        + r.get("stargazerCount", 0) * 10
-        + (50 if (r.get("local") or {}).get("has_tests") else 0)
-        + (30 if (r.get("local") or {}).get("has_ci") else 0)
-    ), reverse=True)
+    def substance(r: dict) -> float:
+        loc = r.get("local") or {}
+        if loc.get("likely_not_mine"):
+            return -1.0
+        return (
+            (r.get("commits") or {}).get("count", 0) * 2
+            + r.get("stargazerCount", 0) * 10
+            + (50 if loc.get("has_tests") else 0)
+            + (30 if loc.get("has_ci") else 0)
+        )
+
+    enriched.sort(key=substance, reverse=True)
 
     prs = external_prs(user)
     if prs:
@@ -409,6 +482,9 @@ def main() -> int:
                 bits.append("tests")
             if loc.get("has_ci"):
                 bits.append("ci")
+            if loc.get("likely_not_mine"):
+                bits.append(f"NOT YOURS: {loc.get('my_commits', 0)}/{loc.get('total_commits')} "
+                            f"commits, owned by {loc.get('top_author', '?')}")
             lang = (r.get("primaryLanguage") or {}).get("name") or "?"
             print(f"  {r['name'][:32]:<34}{lang[:12]:<14}{', '.join(bits)}")
     return 0

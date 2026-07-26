@@ -77,11 +77,27 @@ def read_pdf(path: Path) -> Doc:
     col_suspect = 0
     table_pages = 0
 
+    no_space_glyphs = False
+
     try:
         with pdfplumber.open(path) as pdf:
             d.pages = len(pdf.pages)
+
+            # Does the file contain real space characters at all? Many LaTeX
+            # resume templates emit none: every gap between words is glyph
+            # positioning, not a space. The PDF looks perfect and the text
+            # layer is one continuous string.
+            total_chars = sum(len(p.chars) for p in pdf.pages)
+            space_chars = sum(1 for p in pdf.pages for c in p.chars if c["text"] == " ")
+            if total_chars > 200 and space_chars / total_chars < 0.02:
+                no_space_glyphs = True
+
             for page in pdf.pages:
-                chunks.append(page.extract_text() or "")
+                # pdfplumber defaults to x_tolerance=3.0, which glues words
+                # together when the font's inter-word gap is narrow. Tighten it
+                # for files with no space glyphs so we recover real words to
+                # analyze, rather than analyzing mush of our own making.
+                chunks.append(page.extract_text(x_tolerance=1.5 if no_space_glyphs else 3.0) or "")
 
                 # Two-column detection. Group words into left and right halves
                 # by x position. A real single-column resume has almost nothing
@@ -101,7 +117,18 @@ def read_pdf(path: Path) -> Doc:
         return d
 
     d.text = "\n".join(chunks).strip()
-    d.structure = {"columns_suspected": col_suspect, "table_pages": table_pages}
+    d.structure = {"columns_suspected": col_suspect, "table_pages": table_pages,
+                   "no_space_glyphs": no_space_glyphs}
+
+    if no_space_glyphs:
+        d.warnings.append(
+            "the PDF contains no space characters. Every gap between words is "
+            "glyph positioning, not a space. Sophisticated parsers reconstruct "
+            "the words from coordinates; simpler ones return one continuous "
+            "string, so 'in PyTorch' becomes 'inPyTorch' and a keyword search "
+            "for PyTorch finds nothing. Common with LaTeX resume templates. "
+            "Fix by exporting from a different engine, or ship DOCX instead."
+        )
 
     if col_suspect:
         d.warnings.append(

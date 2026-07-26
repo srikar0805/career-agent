@@ -41,6 +41,7 @@ OUT = REPO / "data" / "raw" / "documents.json"
 CAREER_DIRS = {
     "personal", "cover letter", "cover letters", "applied forms", "sops", "sop",
     "college submission list", "applications", "resume", "resumes", "cv",
+    "cvs", "job applications", "career", "certificates", "certifications",
 }
 
 RESEARCH_DIRS = {
@@ -77,7 +78,8 @@ FORBIDDEN_NAME_PATTERNS = re.compile(
 
 # Classify a document by its own name once we know it is in scope.
 DOC_KINDS = [
-    (re.compile(r"resume|cv\b", re.I), "resume"),
+    # \bcv\b on both sides: "cv\b" alone matches the tail of "OpenCV".
+    (re.compile(r"resume|\bcvs?\b", re.I), "resume"),
     (re.compile(r"cover.?letter", re.I), "cover_letter"),
     (re.compile(r"\bsop\b|statement.?of.?purpose|personal.?statement", re.I), "sop"),
     (re.compile(r"recommendation|\blor\b|reference", re.I), "recommendation"),
@@ -98,9 +100,13 @@ def classify(path: Path) -> str:
 def category_of(path: Path, root: Path) -> str | None:
     """career, research, or None if out of scope."""
     try:
-        parts = [p.lower() for p in path.relative_to(root).parts]
+        raw = path.relative_to(root).parts
     except ValueError:
-        parts = [p.lower() for p in path.parts]
+        raw = path.parts
+    # Strip trailing punctuation from directory names. A folder called
+    # "Resumes." is the same folder as "Resumes", and a literal comparison
+    # silently misses the user's entire resume collection.
+    parts = [p.lower().strip(" .") for p in raw]
 
     if any(p in FORBIDDEN_DIRS for p in parts):
         return None
@@ -166,9 +172,18 @@ def extract_claims(text: str) -> list[str]:
     return claims[:60]
 
 
-def build(root: Path, list_only: bool = False) -> dict:
-    targets = discover(root)
-    print(f"{len(targets)} documents in scope under {root}", file=sys.stderr)
+def build(roots: list[Path], list_only: bool = False) -> dict:
+    targets: list[tuple[Path, str, str]] = []
+    seen_paths: set[Path] = set()
+    for root in roots:
+        for item in discover(root):
+            # A path can appear under two roots if one nests inside the other.
+            if item[0] in seen_paths:
+                continue
+            seen_paths.add(item[0])
+            targets.append(item)
+    print(f"{len(targets)} documents in scope under "
+          f"{', '.join(str(r) for r in roots)}", file=sys.stderr)
 
     by_cat: dict[str, int] = {}
     for _, cat, _ in targets:
@@ -178,7 +193,7 @@ def build(root: Path, list_only: bool = False) -> dict:
 
     if list_only:
         return {
-            "root": str(root),
+            "roots": [str(r) for r in roots],
             "documents": [
                 {"path": str(p), "category": c, "kind": k} for p, c, k in targets
             ],
@@ -210,7 +225,7 @@ def build(root: Path, list_only: bool = False) -> dict:
     docs.sort(key=lambda d: (d["kind"] != "resume", d["name"]))
 
     return {
-        "root": str(root),
+        "roots": [str(r) for r in roots],
         "document_count": len(docs),
         "by_category": by_cat,
         "excluded_dirs": sorted(FORBIDDEN_DIRS),
@@ -220,19 +235,26 @@ def build(root: Path, list_only: bool = False) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Scan career and research documents.")
-    ap.add_argument("--root", default=str(Path.home() / "Documents"))
+    ap.add_argument("--root", action="append", dest="roots",
+                    help="directory to scan; repeatable. "
+                         "Defaults to ~/Documents and ~/Desktop.")
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--list-only", action="store_true",
                     help="show what would be read, read nothing")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
-    root = Path(args.root).expanduser()
-    if not root.exists():
-        print(f"no such directory: {root}", file=sys.stderr)
+    if args.roots:
+        roots = [Path(r).expanduser() for r in args.roots]
+    else:
+        roots = [Path.home() / "Documents", Path.home() / "Desktop"]
+
+    roots = [r for r in roots if r.exists()]
+    if not roots:
+        print("none of the scan roots exist", file=sys.stderr)
         return 2
 
-    data = build(root, args.list_only)
+    data = build(roots, args.list_only)
 
     if args.list_only:
         print(f"\n{'CATEGORY':<10}{'KIND':<16}PATH")

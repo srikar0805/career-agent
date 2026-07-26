@@ -231,10 +231,32 @@ def present_in(term: str, resume_norm: str) -> str | None:
     return None
 
 
+def _canonical_match(s: str) -> str | None:
+    """Match a heading to a canonical one, tolerating common qualifiers.
+
+    Real resumes write "Academic Projects", "Relevant Experience", and
+    "Professional Certifications". Those all land in the right ATS field, so
+    flagging them as unrecognized is noise that trains the user to ignore the
+    warnings that matter.
+    """
+    if s in CANONICAL_HEADINGS:
+        return s
+    words = set(s.split())
+    for canon in CANONICAL_HEADINGS:
+        cw = set(canon.split())
+        if cw and cw <= words and len(words - cw) <= 1:
+            return canon
+    return None
+
+
 def check_headings(resume: str) -> list[str]:
     warnings: list[str] = []
     found: set[str] = set()
-    for line in resume.splitlines():
+    lines = resume.splitlines()
+
+    # The first few lines are the name and contact block. A name in caps looks
+    # exactly like a section heading to any heuristic, and it is not one.
+    for line in lines[3:]:
         s = re.sub(r"^[#*\-\s]+", "", line).strip().rstrip(":").lower()
         # A heading has no digits. "CGPA 7.78" and "2020 to 2024" are content
         # that happens to be short and uppercase, not section names.
@@ -244,8 +266,9 @@ def check_headings(resume: str) -> list[str]:
             and (line.isupper() or line.strip().startswith("#") or s in CANONICAL_HEADINGS)
         )
         if looks_like_heading:
-            if s in CANONICAL_HEADINGS:
-                found.add(s)
+            canon = _canonical_match(s)
+            if canon:
+                found.add(canon)
             elif len(s.split()) <= 4 and s:
                 warnings.append(
                     f'section heading "{s}" is not one ATS parsers recognize. '

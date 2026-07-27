@@ -26,3 +26,7 @@ venv/
 # Editor
 .vscode/
 .idea/
+
+# LaTeX resume sources, personal
+latex/*
+!latex/README.md

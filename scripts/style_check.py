@@ -46,6 +46,20 @@ BANNED_CHARS: dict[str, str] = {
     "✓": "checkmark. Use a word.",
     "✔": "checkmark. Use a word.",
     "★": "star glyph. Use a word.",
+    # Math and technical symbols. The multiplication sign is the dangerous
+    # one: it is the natural thing to type in "44x fewer parameters", and in
+    # a LaTeX PDF it commonly re-encodes in the text layer. An ATS then reads
+    # "44Œ fewer parameters" and the number is destroyed. Survives every
+    # visual proofread because the rendered page looks perfect.
+    "×": 'multiplication sign. Write the letter "x" instead.',
+    "÷": "division sign. Write a slash.",
+    "±": "plus-minus sign. Write it out.",
+    "≈": "approximately-equal sign. Write a tilde or the word.",
+    "≥": "greater-or-equal sign. Write >= or the words.",
+    "≤": "less-or-equal sign. Write <= or the words.",
+    "°": "degree sign. Write the word.",
+    "µ": "micro sign. Write 'micro' or use u.",
+    "′": "prime. Use a straight apostrophe.",
     " ": "non-breaking space. Some ATS parsers mangle it. Use a normal space.",
 }
 
@@ -156,9 +170,13 @@ def check_text(text: str, max_words: int | None = None, min_words: int | None = 
                 violations.append(
                     Violation(i, j, "char", ch, "emoji. Never in a professional document.", ctx)
                 )
-            elif ord(ch) > 0x2000 and unicodedata.category(ch) in ("Pd", "Pi", "Pf"):
+            elif ord(ch) > 0x7F and unicodedata.category(ch) in ("Pd", "Pi", "Pf", "Sm", "Sk", "So"):
+                # Any non-ASCII punctuation or symbol. These survive a visual
+                # check and corrupt in the PDF text layer, which is exactly the
+                # failure mode nobody catches by proofreading.
                 violations.append(
-                    Violation(i, j, "char", ch, "non-ASCII punctuation. Use the ASCII equivalent.", ctx)
+                    Violation(i, j, "char", ch,
+                              f"non-ASCII symbol (U+{ord(ch):04X}). Use the ASCII equivalent.", ctx)
                 )
 
         for m in phrase_re.finditer(line):

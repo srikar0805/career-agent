@@ -246,6 +246,27 @@ def read_pdf(path: Path) -> Doc:
             "text labels."
         )
 
+    # Typographic ligatures. LaTeX automatically renders "fi" as a single
+    # U+FB01 glyph, so the PDF text layer contains "ef<ligature>ciency" and a
+    # keyword search for "efficiency" finds nothing. Invisible on the page,
+    # invisible in the source, and it silently breaks exact-match keyword
+    # scoring on any word containing fi, fl, ff, ffi or ffl.
+    ligatures = {c for c in set(d.text) if 0xFB00 <= ord(c) <= 0xFB06}
+    if ligatures:
+        affected = sorted({
+            w for w in re.findall(r"\S+", d.text)
+            if any(l in w for l in ligatures)
+        })[:6]
+        d.structure["ligatures"] = len(ligatures)
+        d.warnings.append(
+            "typographic ligatures in the text layer ("
+            + " ".join(repr(c) for c in sorted(ligatures))
+            + "). A keyword search for the plain spelling will not match. "
+            + (f"Affected words include: {', '.join(affected)}. " if affected else "")
+            + "In LaTeX, break them with \\/ inside the word, or avoid fi/fl "
+              "spellings in words that matter for keyword matching."
+        )
+
     # Stray modifier letters and private-use characters, same root cause.
     strays = [c for c in set(d.text) if unicodedata.category(c) in ("Lm", "Sk", "Co")]
     if strays:

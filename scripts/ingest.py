@@ -21,6 +21,8 @@ import argparse
 import json
 import re
 import sys
+import shutil
+import subprocess
 import unicodedata
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -64,6 +66,23 @@ def sanitize(text: str) -> str:
 
 
 # ------------------------------------------------------------------ PDF
+
+def _poppler_text(path: Path) -> str:
+    """Extract with poppler if available.
+
+    Used only for defect detection, never as the primary text source. Poppler
+    preserves ligatures where pdfplumber decomposes them, so it sees failures
+    our own extractor hides.
+    """
+    if not shutil.which("pdftotext"):
+        return ""
+    try:
+        r = subprocess.run(["pdftotext", str(path), "-"],
+                           capture_output=True, text=True, timeout=60)
+        return r.stdout if r.returncode == 0 else ""
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
+
 
 def _has_gutter(page, min_width: float = 18.0, min_run: int = 3) -> bool:
     """True when a vertical whitespace band splits text into parallel columns.
@@ -251,10 +270,17 @@ def read_pdf(path: Path) -> Doc:
     # keyword search for "efficiency" finds nothing. Invisible on the page,
     # invisible in the source, and it silently breaks exact-match keyword
     # scoring on any word containing fi, fl, ff, ffi or ffl.
-    ligatures = {c for c in set(d.text) if 0xFB00 <= ord(c) <= 0xFB06}
+    #
+    # Check poppler's extraction, not our own. pdfplumber silently decomposes
+    # ligatures back into their component letters, so checking `d.text` reports
+    # clean on a file that poppler, and therefore many real parsers, reads as
+    # ligated. That false negative is worse than no check at all, because it
+    # produces confidence in a broken document.
+    probe = _poppler_text(path) or d.text
+    ligatures = {c for c in set(probe) if 0xFB00 <= ord(c) <= 0xFB06}
     if ligatures:
         affected = sorted({
-            w for w in re.findall(r"\S+", d.text)
+            w for w in re.findall(r"\S+", probe)
             if any(l in w for l in ligatures)
         })[:6]
         d.structure["ligatures"] = len(ligatures)

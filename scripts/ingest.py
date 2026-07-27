@@ -65,6 +65,88 @@ def sanitize(text: str) -> str:
 
 # ------------------------------------------------------------------ PDF
 
+def _has_gutter(page, min_width: float = 18.0, min_run: int = 3) -> bool:
+    """True when a vertical whitespace band splits text into parallel columns.
+
+    Two things this must get right, because the naive version of this check
+    gets both wrong.
+
+    It must NOT fire on right-aligned dates. Every resume right-aligns dates,
+    which puts 30 to 40 percent of words in the right half of a perfectly
+    ordinary single-column page. The tell is that right-aligned content all
+    ENDS at the right margin and STARTS wherever the preceding text happened
+    to stop, so its start positions are scattered.
+
+    It must still fire on a localized column block, such as a three-column
+    skills list occupying four rows of an otherwise single-column resume.
+    That block genuinely interleaves when parsed, so requiring a gutter down
+    the whole page misses a real defect.
+
+    So: find runs of consecutive rows sharing a gutter, then require the right
+    side of those rows to start at a consistent x, which is what a column does
+    and right-alignment does not.
+    """
+    words = page.extract_words() or []
+    if len(words) < 30:
+        return False
+
+    buckets: dict[int, list] = {}
+    for w in words:
+        buckets.setdefault(int(w["top"] // 6), []).append(w)
+    keys = sorted(k for k, v in buckets.items() if len(v) >= 2)
+    if len(keys) < min_run:
+        return False
+
+    right_margin = max(w["x1"] for w in words)
+
+    x = page.width * 0.15
+    while x < page.width * 0.85:
+        run: list[int] = []
+        for k in keys:
+            ws = buckets[k]
+            before = any(w["x1"] <= x for w in ws)
+            after = any(w["x0"] >= x + min_width for w in ws)
+            inside = any(w["x0"] < x + min_width and w["x1"] > x for w in ws)
+            if before and after and not inside:
+                run.append(k)
+                continue
+            if len(run) >= min_run and _run_is_columnar(buckets, run, x, min_width, right_margin):
+                return True
+            run = []
+        if len(run) >= min_run and _run_is_columnar(buckets, run, x, min_width, right_margin):
+            return True
+        x += 4.0
+    return False
+
+
+def _run_is_columnar(buckets, run, x, min_width, right_margin) -> bool:
+    """Distinguish a real column from a run of right-aligned line endings."""
+    starts, ends, cell_words = [], [], []
+    for k in run:
+        right = [w for w in buckets[k] if w["x0"] >= x + min_width]
+        if not right:
+            return False
+        starts.append(min(w["x0"] for w in right))
+        ends.append(max(w["x1"] for w in right))
+        cell_words.append(len(right))
+
+    spread = max(starts) - min(starts)
+
+    # Right-aligned content ends flush against the right margin on every row.
+    if sum(1 for e in ends if abs(e - right_margin) < 3.0) >= len(run) - 1 and spread > 20.0:
+        return False
+
+    # A column carries real content. A right-aligned date or a repeated
+    # "Certification" label is one to three short tokens, and three such rows
+    # stacked up are geometrically identical to a column while parsing
+    # perfectly well, because each row is a self-contained unit.
+    if sum(cell_words) / len(cell_words) < 2.0:
+        return False
+
+    # A real column starts at the same x on every row.
+    return spread <= 20.0
+
+
 def read_pdf(path: Path) -> Doc:
     d = Doc(path=str(path), kind="pdf", text="")
     try:
@@ -99,16 +181,16 @@ def read_pdf(path: Path) -> Doc:
                 # analyze, rather than analyzing mush of our own making.
                 chunks.append(page.extract_text(x_tolerance=1.5 if no_space_glyphs else 3.0) or "")
 
-                # Two-column detection. Group words into left and right halves
-                # by x position. A real single-column resume has almost nothing
-                # starting past the midpoint; a two-column one has a full
-                # sidebar there.
-                words = page.extract_words() or []
-                if words:
-                    mid = page.width / 2
-                    right = sum(1 for w in words if w["x0"] > mid)
-                    if right / len(words) > 0.30:
-                        col_suspect += 1
+                # Two-column detection by finding a vertical gutter.
+                #
+                # Counting words past the page midpoint does NOT work. Every
+                # resume right-aligns its dates, which puts 30% of words in the
+                # right half of a perfectly ordinary single-column document.
+                # What actually distinguishes a two-column layout is a vertical
+                # band of whitespace that persists down the page while text
+                # exists on both sides of it.
+                if _has_gutter(page):
+                    col_suspect += 1
 
                 if page.find_tables():
                     table_pages += 1

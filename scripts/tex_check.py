@@ -35,7 +35,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
-from ingest import read  # noqa: E402
+from ingest import read, _has_gutter  # noqa: E402
 from ats_check import run as ats_run  # noqa: E402
 
 
@@ -59,7 +59,13 @@ def compile_tex(tex: Path, outdir: Path) -> tuple[Path | None, str]:
                       "  brew install --cask mactex   (full, several GB)")
 
     name, cmd = engine
+    outdir = outdir.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
+
+    # Run from the .tex file's own directory so a sibling resume.cls resolves,
+    # but pass an absolute path, since a relative one is interpreted against
+    # that same directory and would not be found.
+    tex = tex.resolve()
 
     if name == "tectonic":
         full = [*cmd, "--outdir", str(outdir), str(tex)]
@@ -95,13 +101,14 @@ def probe(pdf: Path) -> dict:
         pages = len(doc.pages)
         chars = [c for p in doc.pages for c in p.chars]
         spaces = sum(1 for c in chars if c["text"] == " ")
-        widths = [p.width for p in doc.pages]
         right = 0
         words_total = 0
+        gutter = False
         for p in doc.pages:
             ws = p.extract_words() or []
             words_total += len(ws)
             right += sum(1 for w in ws if w["x0"] > p.width / 2)
+            gutter = gutter or _has_gutter(p)
 
     d = read(pdf)
     cids = d.text.count("(cid:")
@@ -112,6 +119,7 @@ def probe(pdf: Path) -> dict:
         "space_chars": spaces,
         "space_ratio": (spaces / len(chars)) if chars else 0.0,
         "right_ratio": (right / words_total) if words_total else 0.0,
+        "gutter": gutter,
         "cid_count": cids,
         "words": d.words,
         "text": d.text,
@@ -140,9 +148,13 @@ def report(p: dict, title: str) -> None:
              f"and \\pdfgentounicode=1"))
 
     print(verdict_line(
-        "single column", p["right_ratio"] <= 0.30,
-        f"{100*p['right_ratio']:.0f}% of words start past the page midpoint"
-        + ("" if p["right_ratio"] <= 0.30 else ", so a parser interleaves columns")))
+        "single column", not p["gutter"],
+        ("no vertical gutter; "
+         f"the {100*p['right_ratio']:.0f}% of words past the midpoint are "
+         "right-aligned dates, which parse fine")
+        if not p["gutter"] else
+        "a persistent vertical gutter splits the text, so a parser will "
+        "interleave the two sides into nonsense"))
 
     print(verdict_line(
         "page count", p["pages"] <= 1,
@@ -216,7 +228,7 @@ def main() -> int:
         print("\nWHAT AN ATS RECEIVES\n" + "-" * 70)
         print(p["text"])
 
-    fatal = p["space_ratio"] < 0.05 or p["cid_count"] > 0 or p["right_ratio"] > 0.30
+    fatal = p["space_ratio"] < 0.05 or p["cid_count"] > 0 or p["gutter"]
     return 1 if fatal else 0
 
 

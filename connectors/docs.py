@@ -140,6 +140,27 @@ def discover(root: Path) -> list[tuple[Path, str, str]]:
     return found
 
 
+# Government identifiers and other sensitive numbers that can appear inside a
+# document whose FILENAME looks harmless. School certificates in India carry
+# Aadhaar numbers; US transcripts carry SSNs. The folder-level and filename
+# filters cannot catch these, so redact at the text level as well.
+PII_PATTERNS = [
+    (re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b"), "[AADHAAR REDACTED]"),
+    (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN REDACTED]"),
+    (re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b"), "[PAN REDACTED]"),
+    (re.compile(r"\b[A-Z]{1,2}\d{7}\b"), "[PASSPORT REDACTED]"),
+    (re.compile(r"(date of birth|d\.?o\.?b\.?)\s*[:\-]?\s*[\d/\-]{8,12}", re.I),
+     "[DOB REDACTED]"),
+    (re.compile(r"\b\d{16}\b"), "[CARD REDACTED]"),
+]
+
+
+def redact(text: str) -> str:
+    for pattern, replacement in PII_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def extract_claims(text: str) -> list[str]:
     """Pull sentences that make a quantified claim.
 
@@ -215,9 +236,9 @@ def build(roots: list[Path], list_only: bool = False) -> dict:
             # Full text for resumes, SoPs, and cover letters, since those are
             # short and every line matters. Everything else gets truncated;
             # a 40 page paper contributes its abstract, not its appendices.
-            "text": d.text if kind in ("resume", "cover_letter", "sop") else d.text[:6000],
+            "text": redact(d.text if kind in ("resume", "cover_letter", "sop") else d.text[:6000]),
             "truncated": kind not in ("resume", "cover_letter", "sop") and len(d.text) > 6000,
-            "quantified_claims": extract_claims(d.text),
+            "quantified_claims": [redact(c) for c in extract_claims(d.text)],
         })
     print(file=sys.stderr)
 

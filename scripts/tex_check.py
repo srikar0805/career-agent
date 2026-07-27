@@ -127,6 +127,62 @@ def probe(pdf: Path) -> dict:
     }
 
 
+def extractor_panel(pdf: Path) -> list[tuple[str, str, str]]:
+    """Read the PDF with several extractors and report what each one sees.
+
+    This exists because "will an ATS read my resume" has no single answer. TeX
+    never emits literal space characters; every inter-word gap is positioning.
+    Whether that becomes readable text depends entirely on how the reader
+    reconstructs gaps, and real extractors differ enormously. Measuring three
+    of them is far more honest than asserting a verdict.
+    """
+    results: list[tuple[str, str, str]] = []
+    probe_words = ("Information", "Sciences", "Databases", "Python")
+
+    def grade(text: str) -> str:
+        if not text.strip():
+            return "NO TEXT"
+        # Are ordinary words recoverable as separate tokens?
+        tokens = set(text.split())
+        hits = sum(1 for w in probe_words if w in tokens)
+        glued = sum(1 for w in probe_words
+                    if w not in tokens and w in text.replace(" ", ""))
+        if hits == len(probe_words):
+            return "CLEAN"
+        if hits >= len(probe_words) // 2:
+            return f"PARTIAL ({glued} glued)"
+        return "MANGLED"
+
+    if shutil.which("pdftotext"):
+        try:
+            out = subprocess.run(["pdftotext", "-layout", str(pdf), "-"],
+                                 capture_output=True, text=True, timeout=60)
+            results.append(("poppler pdftotext", grade(out.stdout), out.stdout))
+        except (subprocess.TimeoutExpired, OSError):
+            results.append(("poppler pdftotext", "ERROR", ""))
+    else:
+        results.append(("poppler pdftotext", "not installed", ""))
+
+    try:
+        from pypdf import PdfReader
+        t = "\n".join((p.extract_text() or "") for p in PdfReader(str(pdf)).pages)
+        results.append(("pypdf", grade(t), t))
+    except ImportError:
+        results.append(("pypdf", "not installed", ""))
+    except Exception:
+        results.append(("pypdf", "ERROR", ""))
+
+    try:
+        import pdfplumber
+        with pdfplumber.open(pdf) as d:
+            t = "\n".join((p.extract_text() or "") for p in d.pages)
+        results.append(("pdfplumber (naive)", grade(t), t))
+    except Exception:
+        results.append(("pdfplumber (naive)", "ERROR", ""))
+
+    return results
+
+
 def verdict_line(label: str, ok: bool, detail: str) -> str:
     return f"  [{'PASS' if ok else 'FAIL'}] {label:<20}{detail}"
 
@@ -139,7 +195,8 @@ def report(p: dict, title: str) -> None:
         "space glyphs", p["space_ratio"] >= 0.05,
         f"{p['space_chars']} literal spaces ({100*p['space_ratio']:.1f}% of glyphs). "
         + ("healthy" if p["space_ratio"] >= 0.05
-           else "a simple parser will read this as one continuous string")))
+           else "normal for TeX, which renders gaps as positioning. "
+                "See the extractor panel below for what this actually costs")))
 
     print(verdict_line(
         "unicode mapping", p["cid_count"] == 0,
@@ -228,7 +285,18 @@ def main() -> int:
         print("\nWHAT AN ATS RECEIVES\n" + "-" * 70)
         print(p["text"])
 
-    fatal = p["space_ratio"] < 0.05 or p["cid_count"] > 0 or p["gutter"]
+    panel = extractor_panel(pdf)
+    print("\nWHAT REAL EXTRACTORS SEE")
+    for name, verdict, _ in panel:
+        print(f"  {name:<22}{verdict}")
+    print("  A resume is at risk only when a capable extractor mangles it.")
+    print("  TeX never writes space characters, so pdfplumber's naive mode")
+    print("  mangles every LaTeX resume ever made. That is the tool, not you.")
+
+    capable = [v for n, v, _ in panel if n in ("poppler pdftotext", "pypdf")]
+    extraction_broken = capable and all(v.startswith(("MANGLED", "NO TEXT")) for v in capable)
+
+    fatal = p["cid_count"] > 0 or p["gutter"] or extraction_broken
     return 1 if fatal else 0
 
 

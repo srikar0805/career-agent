@@ -52,21 +52,60 @@ UA = {"User-Agent": "career-agent/1.0 (personal job search)"}
 # profile/companies.yaml is merged on top and takes precedence.
 DEFAULT_BOARDS = {
     "greenhouse": [
+        # Tech product companies
         "stripe", "databricks", "figma", "airbnb", "dropbox", "robinhood",
         "instacart", "doordash", "coinbase", "brex", "ramp", "plaid",
         "cloudflare", "digitalocean", "hashicorp", "gitlab", "elastic",
         "affirm", "flexport", "samsara", "benchling", "scaleai", "discord",
-        "reddit", "grammarly", "asana", "duolingo", "wealthfront",
+        "reddit", "grammarly", "asana", "duolingo", "wealthfront", "chime",
+        "gusto", "rippling", "carta", "twilio", "airtable", "amplitude",
+        "mixpanel", "segment", "fivetran", "dbtlabs", "starburst", "sigma",
+        "hex", "atlan", "monteCarlo", "greatexpectations",
+        # Health, insurance and life sciences. Heavy Power BI and SQL demand,
+        # large analytics orgs, and routine OPT hiring.
+        "oscarhealth", "devoted", "included", "cedar", "komodohealth",
+        "flatiron", "tempus", "veeva", "olive", "healthgorilla", "zocdoc",
+        "hingehealth", "carbonhealth", "spring", "lyra",
+        # Finance, fintech and insurance
+        "betterment", "marqeta", "modernTreasury", "unit", "mercury",
+        "lemonade", "root", "hippo", "policygenius", "ethos",
+        # Retail, logistics, industrial, energy
+        "instacart", "gopuff", "wayfair", "chewy", "faire", "convoy",
+        "projectcanary", "arcadia",
+        # Data, analytics and BI vendors. Hire people who know their own tools.
+        "sisense", "thoughtspot", "domo", "alteryx", "matillion",
     ],
     "lever": [
         "netflix", "spotify", "shopify", "quora", "mistral", "leetcode",
-        "matchgroup", "cruise", "nubank", "sardine",
+        "matchgroup", "cruise", "nubank", "sardine", "attentive",
+        "klaviyo", "everlywell", "included", "kandji", "aledade",
+        "clarifyhealth", "collectivehealth", "wellthy", "zipline",
     ],
     "ashby": [
         "openai", "ramp", "linear", "vercel", "replit", "runway", "cursor",
         "modal", "together", "deepgram", "clerk", "sourcegraph", "warp",
+        "anthropic", "perplexity", "harvey", "sierra", "decagon", "baseten",
+        "prefect", "dagster", "hightouch", "census", "secoda", "omni",
+        "motherduck", "neon", "supabase", "turso", "resend", "knock",
     ],
 }
+
+# Sectors worth adding by hand in profile/companies.yaml, because their boards
+# are not on a public ATS API and cannot be enumerated automatically:
+#
+#   Microsoft partners      The single best fit for a Fabric/Power BI profile.
+#                           Avanade, Slalom, Hitachi Solutions, Neudesic,
+#                           Quisitive, Catapult, BlueGranite, Data Bear.
+#                           Many hire OPT candidates and none need clearance.
+#   Big 4 and consulting    Deloitte, EY, PwC, KPMG, Accenture, Infosys, TCS,
+#                           Cognizant, LTIMindtree, Capgemini. High volume,
+#                           structured new-grad pipelines, sponsor routinely.
+#   Universities            Mizzou itself, plus other Big 12 schools. Research
+#                           and IT analyst roles, on-campus, CPT friendly.
+#   Regional health systems MU Health Care, BJC, SSM, Mercy, Cerner/Oracle
+#                           Health. Kansas City and St. Louis have real
+#                           analytics demand and less competition than the
+#                           coasts.
 
 
 @dataclass

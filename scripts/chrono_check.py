@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""Verify a resume's experience section is in reverse-chronological order.
+
+This exists because the failure is easy to introduce and nearly invisible to
+the person who introduced it. Adding one role to the middle of a list, or
+reordering by relevance and forgetting to re-sort, produces a document that a
+recruiter reads as carelessness before they read anything else. Dates are the
+one part of a resume that gets checked arithmetically.
+
+Also flags overlapping full-time roles, which read as either an error or an
+undisclosed second job, and gaps over six months, which invite a question
+worth preparing for.
+
+Usage:
+    python scripts/chrono_check.py resume.pdf
+    python scripts/chrono_check.py latex/resume/*/main.tex
+    python scripts/chrono_check.py resume.pdf --json
+
+Exit codes:
+    0  ordered correctly
+    1  out of order or overlapping
+    2  bad invocation
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ingest import read  # noqa: E402
+
+MONTHS = {m: i + 1 for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun",
+     "jul", "aug", "sep", "oct", "nov", "dec"])}
+
+# "Feb 2026 - Present", "May 2024 - Jun 2025", "Feb 24 - Apr 24"
+RANGE = re.compile(
+    r"([A-Z][a-z]{2})\.?\s*(\d{2,4})\s*(?:-|to|until)\s*"
+    r"(Present|Current|(?:[A-Z][a-z]{2})\.?\s*\d{2,4})",
+    re.I,
+)
+
+
+def parse_point(month: str, year: str) -> tuple[int, int]:
+    y = int(year)
+    if y < 100:                      # "24" means 2024, not 24 AD
+        y += 2000
+    return (y, MONTHS.get(month[:3].lower(), 1))
+
+
+def parse_ranges(text: str) -> list[dict]:
+    out = []
+    for m in RANGE.finditer(text):
+        start = parse_point(m.group(1), m.group(2))
+        end_raw = m.group(3)
+        if end_raw.lower() in ("present", "current"):
+            end = (9999, 12)
+            end_label = "Present"
+        else:
+            em = re.match(r"([A-Z][a-z]{2})\.?\s*(\d{2,4})", end_raw, re.I)
+            end = parse_point(em.group(1), em.group(2)) if em else (9999, 12)
+            end_label = end_raw
+        out.append({
+            "start": start, "end": end,
+            "label": f"{m.group(1)} {m.group(2)} to {end_label}",
+            "pos": m.start(),
+        })
+    return out
+
+
+def months_between(a: tuple[int, int], b: tuple[int, int]) -> int:
+    return (b[0] - a[0]) * 12 + (b[1] - a[1])
+
+
+def check(text: str) -> dict:
+    # Only the experience section. Education is conventionally listed
+    # reverse-chronologically too, but project dates are not, and mixing them
+    # in produces false positives.
+    body = text
+    for marker in ("SELECTED PROJECTS", "ACADEMIC PROJECTS", "PROJECTS",
+                   "TECHNICAL SKILLS", "EDUCATION", "CERTIFICATIONS"):
+        idx = body.upper().find(marker)
+        if idx > 0:
+            body = body[:idx]
+            break
+
+    ranges = parse_ranges(body)
+    problems, warnings = [], []
+
+    for i in range(len(ranges) - 1):
+        a, b = ranges[i], ranges[i + 1]
+        if a["start"] < b["start"]:
+            problems.append(
+                f"out of order: '{a['label']}' is listed above '{b['label']}' "
+                f"but started earlier"
+            )
+
+    # Overlap and gap analysis on the chronologically sorted view.
+    ordered = sorted(ranges, key=lambda r: r["start"])
+    for i in range(len(ordered) - 1):
+        a, b = ordered[i], ordered[i + 1]
+        if a["end"] != (9999, 12) and b["start"] < a["end"]:
+            overlap = months_between(b["start"], a["end"])
+            if overlap >= 2:
+                problems.append(
+                    f"overlap of {overlap} months: '{a['label']}' and "
+                    f"'{b['label']}' run concurrently"
+                )
+        elif a["end"] != (9999, 12):
+            gap = months_between(a["end"], b["start"])
+            if gap > 6:
+                warnings.append(
+                    f"gap of {gap} months between '{a['label']}' and '{b['label']}'. "
+                    f"Not a defect, but expect to be asked about it."
+                )
+
+    return {
+        "roles_found": len(ranges),
+        "ranges": [r["label"] for r in ranges],
+        "ordered": not problems,
+        "problems": problems,
+        "warnings": warnings,
+    }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Check reverse-chronological order.")
+    ap.add_argument("paths", nargs="+", help="resume PDF, DOCX, or .tex files")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args()
+
+    results, failed = {}, False
+    for raw in args.paths:
+        p = Path(raw).expanduser()
+        if not p.exists():
+            print(f"no such file: {p}", file=sys.stderr)
+            return 2
+        text = p.read_text(encoding="utf-8", errors="replace") if p.suffix == ".tex" \
+            else read(p).text
+        r = check(text)
+        results[str(p)] = r
+        if r["problems"]:
+            failed = True
+
+    if args.json:
+        print(json.dumps(results, indent=2))
+        return 1 if failed else 0
+
+    for path, r in results.items():
+        name = Path(path).parent.name if Path(path).name == "main.tex" else Path(path).name
+        status = "OK" if r["ordered"] else "OUT OF ORDER"
+        print(f"\n{name}  [{status}]  {r['roles_found']} date ranges")
+        for lbl in r["ranges"]:
+            print(f"    {lbl}")
+        for prob in r["problems"]:
+            print(f"  PROBLEM  {prob}")
+        for w in r["warnings"]:
+            print(f"  note     {w}")
+
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

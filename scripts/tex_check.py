@@ -27,6 +27,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -183,6 +184,34 @@ def extractor_panel(pdf: Path) -> list[tuple[str, str, str]]:
     return results
 
 
+def stray_markup(pdf: Path) -> list[tuple[int, str]]:
+    """Find LaTeX markup that leaked into the rendered document.
+
+    An unbalanced bracket or brace from a macro argument renders as literal
+    text. It is easy to introduce with a scripted edit and genuinely hard to
+    see when proofreading, because the eye reads it as part of the layout
+    rather than as a character in the document.
+    """
+    if not shutil.which("pdftotext"):
+        return []
+    try:
+        out = subprocess.run(["pdftotext", "-layout", str(pdf), "-"],
+                             capture_output=True, text=True, timeout=60).stdout
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+
+    bad = []
+    for i, line in enumerate(out.splitlines(), 1):
+        s = line.strip()
+        if s in ("]", "[", "}", "{"):
+            bad.append((i, f"a lone {s} on its own line"))
+        elif re.search(r"\s[\]\}]\s*$", line):
+            bad.append((i, f"line ends with a dangling bracket: {s[-40:]}"))
+        elif re.search(r"\\[a-zA-Z]{2,}", line):
+            bad.append((i, f"an unrendered LaTeX command: {s[:40]}"))
+    return bad
+
+
 def verdict_line(label: str, ok: bool, detail: str) -> str:
     return f"  [{'PASS' if ok else 'FAIL'}] {label:<20}{detail}"
 
@@ -285,6 +314,12 @@ def main() -> int:
         print("\nWHAT AN ATS RECEIVES\n" + "-" * 70)
         print(p["text"])
 
+    stray = stray_markup(pdf)
+    print(verdict_line(
+        "no stray markup", not stray,
+        "no leaked LaTeX in the rendered text" if not stray
+        else f"{len(stray)} instance(s): " + "; ".join(d for _, d in stray[:3])))
+
     panel = extractor_panel(pdf)
     print("\nWHAT REAL EXTRACTORS SEE")
     for name, verdict, _ in panel:
@@ -296,7 +331,7 @@ def main() -> int:
     capable = [v for n, v, _ in panel if n in ("poppler pdftotext", "pypdf")]
     extraction_broken = capable and all(v.startswith(("MANGLED", "NO TEXT")) for v in capable)
 
-    fatal = p["cid_count"] > 0 or p["gutter"] or extraction_broken
+    fatal = p["cid_count"] > 0 or p["gutter"] or extraction_broken or bool(stray)
     return 1 if fatal else 0
 
 

@@ -76,28 +76,65 @@ def months_between(a: tuple[int, int], b: tuple[int, int]) -> int:
     return (b[0] - a[0]) * 12 + (b[1] - a[1])
 
 
+# Headings that begin a block of roles. A resume may legitimately split
+# experience into several such blocks, for example PROFESSIONAL EXPERIENCE
+# above RESEARCH ENGINEERING. Each block is ordered internally; the blocks
+# themselves are ordered by relevance, not by date, and comparing across them
+# produces a false positive on a perfectly correct document.
+EXPERIENCE_HEADINGS = (
+    "PROFESSIONAL EXPERIENCE", "RESEARCH ENGINEERING", "RESEARCH EXPERIENCE",
+    "WORK EXPERIENCE", "RELEVANT EXPERIENCE", "ENGINEERING EXPERIENCE",
+    "INDUSTRY EXPERIENCE", "EXPERIENCE", "EMPLOYMENT", "INTERNSHIPS",
+)
+
+# Headings that end the experience region entirely.
+STOP_HEADINGS = (
+    "SELECTED PROJECTS", "ACADEMIC PROJECTS", "PROJECTS", "TECHNICAL SKILLS",
+    "SKILLS", "EDUCATION", "CERTIFICATIONS", "PUBLICATIONS", "AWARDS",
+)
+
+
+def experience_blocks(text: str) -> list[str]:
+    """Split the experience region into independently-ordered blocks."""
+    upper = text.upper()
+
+    stop = len(text)
+    for h in STOP_HEADINGS:
+        i = upper.find(h)
+        if i > 0:
+            stop = min(stop, i)
+
+    region = text[:stop]
+    region_upper = region.upper()
+
+    starts = sorted(
+        {i for h in EXPERIENCE_HEADINGS for i in [region_upper.find(h)] if i >= 0}
+    )
+    if not starts:
+        return [region]
+
+    blocks = []
+    for n, s in enumerate(starts):
+        e = starts[n + 1] if n + 1 < len(starts) else len(region)
+        blocks.append(region[s:e])
+    return blocks
+
+
 def check(text: str) -> dict:
-    # Only the experience section. Education is conventionally listed
-    # reverse-chronologically too, but project dates are not, and mixing them
-    # in produces false positives.
-    body = text
-    for marker in ("SELECTED PROJECTS", "ACADEMIC PROJECTS", "PROJECTS",
-                   "TECHNICAL SKILLS", "EDUCATION", "CERTIFICATIONS"):
-        idx = body.upper().find(marker)
-        if idx > 0:
-            body = body[:idx]
-            break
-
-    ranges = parse_ranges(body)
     problems, warnings = [], []
+    ranges: list[dict] = []
 
-    for i in range(len(ranges) - 1):
-        a, b = ranges[i], ranges[i + 1]
-        if a["start"] < b["start"]:
-            problems.append(
-                f"out of order: '{a['label']}' is listed above '{b['label']}' "
-                f"but started earlier"
-            )
+    # Validate ordering WITHIN each block, never across blocks.
+    for block in experience_blocks(text):
+        block_ranges = parse_ranges(block)
+        ranges.extend(block_ranges)
+        for i in range(len(block_ranges) - 1):
+            a, b = block_ranges[i], block_ranges[i + 1]
+            if a["start"] < b["start"]:
+                problems.append(
+                    f"out of order: '{a['label']}' is listed above '{b['label']}' "
+                    f"but started earlier"
+                )
 
     # Overlap and gap analysis on the chronologically sorted view.
     ordered = sorted(ranges, key=lambda r: r["start"])

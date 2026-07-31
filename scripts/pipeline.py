@@ -320,7 +320,10 @@ def cmd_artifact(a) -> int:
            VALUES (?,?,?,?,?,?,?)""",
         (a.id, a.kind, a.path, a.score, a.verdict, a.evidence, now()),
     )
-    if a.score is not None:
+    # Only a document score belongs in applications.fit_score. A /fit-analysis
+    # result is a different measurement on a different scale, and writing it
+    # here silently overwrote the resume-judge score for the same application.
+    if a.score is not None and a.kind not in ("fit_analysis",):
         conn.execute("UPDATE applications SET fit_score=?, updated_at=? WHERE id=?",
                      (a.score, now(), a.id))
     conn.commit()

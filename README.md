@@ -1,6 +1,6 @@
 # career-agent
 
-A career operating system for Claude Code. 14 skills and 7 subagents that write resumes, cover letters, cold messages, interview prep, and outreach from an evidence bank built out of your real work, then attack every draft with adversarial reviewers before you ever see it.
+A career operating system for Claude Code. 15 skills and 7 subagents that write resumes, cover letters, cold messages, interview prep, and outreach from an evidence bank built out of your real work, then attack every draft with adversarial reviewers before you ever see it.
 
 Covers job search, grad school and research outreach, and freelance client pitching.
 
@@ -71,7 +71,7 @@ cd ~/Documents/my-projects/career-agent
 bash install.sh
 ```
 
-The installer creates a virtualenv, installs dependencies, installs `gh` if homebrew is present, symlinks all 14 skills into `~/.claude/skills/` and all 7 agents into `~/.claude/agents/`, and initializes the pipeline database.
+The installer creates a virtualenv, installs dependencies, installs `gh` if homebrew is present, symlinks all 15 skills into `~/.claude/skills/` and all 7 agents into `~/.claude/agents/`, and initializes the pipeline database.
 
 Then authenticate GitHub, which needs a browser and so cannot be automated:
 
@@ -112,6 +112,7 @@ To include LinkedIn: go to LinkedIn, Settings, Data Privacy, Get a copy of your 
 | `/job-hunt <query>` | Live roles from public ATS APIs, ranked by what your evidence actually proves, with warm paths marked. |
 | `/apply <url or id>` | End to end for one role, including the screening-question answer sheet. Stops before submit. |
 | `/pipeline` | Status board, conversion funnel, stale applications, follow-ups due. |
+| `/fit-analysis <url>` | Weighted assessment of one resume against one posting: ATS, technical, experience and competitiveness, with stage-by-stage interview probability and an apply-or-skip verdict. Scores only what a recruiter can see. |
 
 ### Adjacent
 
@@ -148,7 +149,7 @@ career-agent/
 ├── connectors/                # github.py  linkedin.py  docs.py  build_evidence.py
 ├── scripts/                   # pipeline.py  ats_check.py  render.py  discover.py
 │                              # ingest.py  style_check.py  db.py
-├── skills/                    # 14 skills
+├── skills/                    # 15 skills
 ├── agents/                    # 7 subagents
 ├── templates/                 # style-rules.md  rubric-resume.md
 ├── profile/                   # YOUR DATA, gitignored

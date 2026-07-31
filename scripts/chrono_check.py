@@ -94,6 +94,33 @@ STOP_HEADINGS = (
 )
 
 
+def strip_tex_comments(text: str) -> str:
+    """Remove LaTeX comment lines.
+
+    A .tex file often carries a header comment explaining its own structure,
+    and that prose mentions the section names. Matching headings inside it
+    splits the document at positions that do not exist in the output.
+    """
+    out = []
+    for line in text.splitlines():
+        s = line.lstrip()
+        if s.startswith("%"):
+            continue
+        # Strip trailing comments, honouring the \% escape.
+        i, esc = 0, False
+        while i < len(line):
+            if line[i] == "\\":
+                esc = not esc
+            elif line[i] == "%" and not esc:
+                line = line[:i]
+                break
+            else:
+                esc = False
+            i += 1
+        out.append(line)
+    return "\n".join(out)
+
+
 def experience_blocks(text: str) -> list[str]:
     """Split the experience region into independently-ordered blocks."""
     upper = text.upper()
@@ -107,9 +134,18 @@ def experience_blocks(text: str) -> list[str]:
     region = text[:stop]
     region_upper = region.upper()
 
-    starts = sorted(
-        {i for h in EXPERIENCE_HEADINGS for i in [region_upper.find(h)] if i >= 0}
-    )
+    # Match longest headings first, then discard any match that falls inside
+    # one already claimed. Without this, "EXPERIENCE" matches inside
+    # "PROFESSIONAL EXPERIENCE" and splits a single heading in two.
+    claimed: list[tuple[int, int]] = []
+    for h in sorted(EXPERIENCE_HEADINGS, key=len, reverse=True):
+        i = region_upper.find(h)
+        while i >= 0:
+            if not any(a <= i < b for a, b in claimed):
+                claimed.append((i, i + len(h)))
+            i = region_upper.find(h, i + 1)
+
+    starts = sorted(a for a, _ in claimed)
     if not starts:
         return [region]
 
@@ -176,8 +212,10 @@ def main() -> int:
         if not p.exists():
             print(f"no such file: {p}", file=sys.stderr)
             return 2
-        text = p.read_text(encoding="utf-8", errors="replace") if p.suffix == ".tex" \
-            else read(p).text
+        if p.suffix == ".tex":
+            text = strip_tex_comments(p.read_text(encoding="utf-8", errors="replace"))
+        else:
+            text = read(p).text
         r = check(text)
         results[str(p)] = r
         if r["problems"]:

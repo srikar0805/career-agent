@@ -267,9 +267,16 @@ def check_headings(resume: str) -> list[str]:
         )
         if looks_like_heading:
             canon = _canonical_match(s)
+            # A short heading is unambiguous. A long one is usually a sentence
+            # fragment that happened to look like a heading, so the word cap
+            # keeps those out of the warnings. But an all-caps line under 40
+            # characters is a section name with near certainty however long it
+            # runs, and long invented headings ("THINGS YOU CAN OPEN AND TRY")
+            # are exactly the ones that need catching.
+            cap = 7 if line.isupper() else 4
             if canon:
                 found.add(canon)
-            elif len(s.split()) <= 4 and s:
+            elif len(s.split()) <= cap and s:
                 warnings.append(
                     f'section heading "{s}" is not one ATS parsers recognize. '
                     f"Use a standard name so the content lands in the right field."

@@ -149,6 +149,34 @@ python scripts/render.py data/artifacts/<slug>/resume.md -o data/artifacts/<slug
 python scripts/ats_check.py --resume data/artifacts/<slug>/resume.docx --jd <posting>
 ```
 
+### The gate, on the PDF, every single time
+
+A resume is not finished until all four of these pass on the compiled PDF. Run
+them on the actual output file, not on the markdown or the `.tex`, because
+every defect they catch is one that exists only after rendering.
+
+```bash
+python scripts/page_check.py  <resume.pdf>     # fills the page, no orphan page, no internal holes
+python scripts/chrono_check.py <resume.pdf>    # reverse-chronological, no unexplained overlap
+python scripts/tex_check.py    <main.tex>      # stray markup, ligatures, extractability
+pdftotext -layout <resume.pdf> - | grep -nE "^[A-Z][A-Z &]{3,}$"   # read the headings back
+```
+
+Two of these are non-negotiable and have both been got wrong before:
+
+**Fill the page to the last line.** `page_check.py` passes when the last line
+sits within a third of an inch of the bottom margin. A page that stops short
+reads as thin no matter how good the content is. Fill it with real evidence
+first, an unused atom from the bank; only relax spacing once there is nothing
+true left to add. Never pad with filler to hit the number.
+
+**Standard section headings only.** Read the headings back out of the PDF and
+check them against `CANONICAL_HEADINGS` in `scripts/ats_check.py`. `PROJECTS`,
+`EXPERIENCE`, `TECHNICAL SKILLS`, `EDUCATION`, `CERTIFICATIONS`. Not "Things
+You Can Open And Try", not "Also Built", not any invented name however well it
+describes the content. An ATS parses an unrecognized heading as body text and
+files everything under it in the wrong field.
+
 Log it, so `/follow-up` and `/interview-prep` can use it later:
 
 ```bash
@@ -180,3 +208,6 @@ Show the user:
 - If the user asks you to add something the evidence does not support, say what the evidence supports instead and let them decide. Do not silently comply and do not refuse; give them the accurate version and the choice.
 - Work authorization is stated honestly when the posting or form asks. Never obscure it.
 - One page unless the user has ten or more years of experience.
+- One page means one **full** page. `page_check.py` must pass before the file is presented.
+- Section headings are the standard ones. Inventing a better name for a section is never worth what it costs at the parser.
+- Run the checks on the compiled PDF and paste the output. A check you did not run is not a check, and a check that finds nothing to check has failed, not passed.

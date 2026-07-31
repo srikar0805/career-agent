@@ -122,37 +122,46 @@ def strip_tex_comments(text: str) -> str:
 
 
 def experience_blocks(text: str) -> list[str]:
-    """Split the experience region into independently-ordered blocks."""
+    """Split the experience region into independently-ordered blocks.
+
+    The region runs from the first experience heading to the first stop
+    heading that follows it. Anchoring on the experience heading rather than
+    on the top of the document matters: a resume may lead with PROJECTS, and
+    searching for the first stop heading anywhere would end the region above
+    the experience section, leaving nothing to check and passing silently.
+    """
     upper = text.upper()
-
-    stop = len(text)
-    for h in STOP_HEADINGS:
-        i = upper.find(h)
-        if i > 0:
-            stop = min(stop, i)
-
-    region = text[:stop]
-    region_upper = region.upper()
 
     # Match longest headings first, then discard any match that falls inside
     # one already claimed. Without this, "EXPERIENCE" matches inside
     # "PROFESSIONAL EXPERIENCE" and splits a single heading in two.
     claimed: list[tuple[int, int]] = []
     for h in sorted(EXPERIENCE_HEADINGS, key=len, reverse=True):
-        i = region_upper.find(h)
+        i = upper.find(h)
         while i >= 0:
             if not any(a <= i < b for a, b in claimed):
                 claimed.append((i, i + len(h)))
-            i = region_upper.find(h, i + 1)
+            i = upper.find(h, i + 1)
 
     starts = sorted(a for a, _ in claimed)
     if not starts:
-        return [region]
+        return []
+
+    begin = starts[0]
+    stop = len(text)
+    for h in STOP_HEADINGS:
+        i = upper.find(h, begin + 1)
+        if i > 0:
+            stop = min(stop, i)
+
+    # Drop any experience heading beyond the stop, for example a "PROJECTS"
+    # section that itself contains the word EXPERIENCE in a bullet.
+    starts = [s for s in starts if s < stop]
 
     blocks = []
     for n, s in enumerate(starts):
-        e = starts[n + 1] if n + 1 < len(starts) else len(region)
-        blocks.append(region[s:e])
+        e = starts[n + 1] if n + 1 < len(starts) else stop
+        blocks.append(text[s:e])
     return blocks
 
 
@@ -160,8 +169,19 @@ def check(text: str) -> dict:
     problems, warnings = [], []
     ranges: list[dict] = []
 
+    blocks = experience_blocks(text)
+
+    # A check that finds nothing to check must not report OK. Zero blocks or
+    # zero date ranges means the parse failed, not that the document is
+    # correct, and a silent pass here is worse than no check at all.
+    if not blocks:
+        problems.append(
+            "no experience section found, so chronology was never checked. "
+            "Expected one of: " + ", ".join(EXPERIENCE_HEADINGS[:4]).title() + "."
+        )
+
     # Validate ordering WITHIN each block, never across blocks.
-    for block in experience_blocks(text):
+    for block in blocks:
         block_ranges = parse_ranges(block)
         ranges.extend(block_ranges)
         for i in range(len(block_ranges) - 1):
@@ -190,6 +210,12 @@ def check(text: str) -> dict:
                     f"gap of {gap} months between '{a['label']}' and '{b['label']}'. "
                     f"Not a defect, but expect to be asked about it."
                 )
+
+    if blocks and not ranges:
+        problems.append(
+            "found an experience section but no date ranges in it, so nothing "
+            "was verified. Check that dates are written as 'Mon YYYY - Mon YYYY'."
+        )
 
     return {
         "roles_found": len(ranges),

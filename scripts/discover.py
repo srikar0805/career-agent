@@ -331,13 +331,32 @@ def filter_by_identity(jobs: list[Job], ident: dict) -> tuple[list[Job], list[st
     kept = []
     needs_sponsorship = bool(ident.get("needs_sponsorship"))
     dropped_citizenship = 0
+    extra = [str(s).lower() for s in ident.get("exclude_if_posting_mentions", [])]
 
     for j in jobs:
-        blob = j.jd_text.lower()
+        # Collapse ALL whitespace before matching. Job descriptions wrap, and a
+        # disqualifier split across a line break is invisible to both a literal
+        # search and a regex. "without the\n  need for visa support" is the same
+        # requirement as the unwrapped form and must be caught identically.
+        blob = " ".join(j.jd_text.lower().split())
+        if needs_sponsorship and any(e in blob for e in extra if e):
+            dropped_citizenship += 1
+            continue
+
         if needs_sponsorship and re.search(
+            # Citizenship and clearance
             r"(u\.?s\.? citizen(ship)? (is )?required|must be a u\.?s\.? citizen|"
-            r"security clearance|not (able|be able) to sponsor|no sponsorship|"
-            r"unable to sponsor|without sponsorship)", blob
+            r"security clearance|ability to obtain a .{0,20}clearance|"
+            # Employer states it will not sponsor
+            r"not (able|be able) to sponsor|no sponsorship|unable to sponsor|"
+            r"do(es)? not (provide |offer )?sponsor|will not sponsor|"
+            # Requirement placed on the candidate. This phrasing is more common
+            # than the negative form and reads as boilerplate, which is exactly
+            # why it gets missed.
+            r"without (the need for |requiring )?(visa support|sponsorship|"
+            r"employer sponsorship|visa sponsorship)|"
+            r"(work|employment) authorization without sponsorship|"
+            r"not require sponsorship|no visa support)", blob
         ):
             dropped_citizenship += 1
             continue

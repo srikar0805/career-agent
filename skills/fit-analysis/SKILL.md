@@ -152,6 +152,22 @@ Check the posting for anything that makes the whole analysis moot, and lead with
 
 Read `profile/identity.yaml` for the constraints to check against. A disqualifier outranks the score: report it first, and say plainly that the fit percentage is irrelevant if the filter is absolute.
 
+**Availability is not the graduation date.** Read `available_now_part_time`,
+`available_now_full_time` and `available_unrestricted` before writing any
+availability claim. A student on CPT can often start immediately, and treating
+graduation as the start date understates every internship, co-op and part-time
+req by a wide margin. Where full-time availability is capped rather than
+blocked, say what the cap is and what exceeding it costs, and separate the
+three blockers so the user can act on the right one:
+
+1. **Legal authorization.** Usually the least binding. CPT exists for this.
+2. **Program permission** to work while enrolled, especially out of state.
+3. **The employer's willingness** to hire for a bounded term. An indefinite
+   full-time req is not satisfied by a candidate who can offer eleven months,
+   and that is a different objection from "cannot legally work".
+
+Naming the wrong one sends the user to the wrong fix.
+
 Log the result so the pipeline carries it:
 
 ```bash

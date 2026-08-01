@@ -158,11 +158,23 @@ every defect they catch is one that exists only after rendering.
 ```bash
 python scripts/page_check.py  <resume.pdf>     # fills the page, no orphan page, no internal holes
 python scripts/chrono_check.py <resume.pdf>    # reverse-chronological, no unexplained overlap
+python scripts/title_check.py  <resume.pdf>    # job titles match the ones actually held
 python scripts/tex_check.py    <main.tex>      # stray markup, ligatures, extractability
 pdftotext -layout <resume.pdf> - | grep -nE "^[A-Z][A-Z &]{3,}$"   # read the headings back
 ```
 
-Two of these are non-negotiable and have both been got wrong before:
+Three of these are non-negotiable and all three have been got wrong before:
+
+**Never retitle a job.** Titles come from `profile/titles.yaml` and are copied
+exactly. Tailoring the bullets under a job to a posting is the whole point of
+this skill; changing the title of the job is a factual claim about employment
+that a background check verifies against payroll, and the cost of being caught
+is a rescinded offer rather than a lost interview. This drifts easily because
+it does not feel like lying: "Student Assistant, Technical (AI Image
+Engineering)" becomes "Data Engineer (Student Technical Assistant)" on a data
+resume to help the reader, and one job ends up with six spellings across six
+files, none of them the one on the offer letter. If a title reads badly for a
+target, the fix is a stronger first bullet, not a better title.
 
 **Fill the page to the last line.** `page_check.py` passes when the last line
 sits within a third of an inch of the bottom margin. A page that stops short
@@ -209,5 +221,6 @@ Show the user:
 - Work authorization is stated honestly when the posting or form asks. Never obscure it.
 - One page unless the user has ten or more years of experience.
 - One page means one **full** page. `page_check.py` must pass before the file is presented.
+- Job titles are copied from `profile/titles.yaml` verbatim and are never tailored. `title_check.py` must pass.
 - Section headings are the standard ones. Inventing a better name for a section is never worth what it costs at the parser.
 - Run the checks on the compiled PDF and paste the output. A check you did not run is not a check, and a check that finds nothing to check has failed, not passed.

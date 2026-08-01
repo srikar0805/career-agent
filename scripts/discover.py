@@ -270,6 +270,52 @@ def load_identity() -> dict:
     return {}
 
 
+# Suffixes a search term may pick up and still mean the same thing.
+# "intern" should find "internship" and "interns". It must NOT find
+# "Internals" or "International", which is what plain substring matching does,
+# and which fills an internship search with Staff engineer roles.
+_SUFFIX = r"(?:s|es|ship|ships|ing|ed|er|ers)?"
+
+
+def term_pattern(t: str) -> re.Pattern:
+    """Word-boundary matcher tolerant of the usual plural and gerund forms.
+
+    The boundary class includes + and # so that c++ and c# match as themselves
+    rather than as a bare c.
+    """
+    return re.compile(
+        r"(?<![A-Za-z0-9+#_])" + re.escape(t) + _SUFFIX + r"(?![A-Za-z0-9+#_])",
+        re.I,
+    )
+
+
+# Titles that cannot be an entry-level role whatever else they say.
+SENIOR_MARKERS = (
+    "senior", "sr.", "staff", "principal", "lead", "director", "head of",
+    "manager", "architect", "distinguished", "vp", "president", "chief",
+    " ii", " iii", " iv", "level 2", "l4", "l5", "l6",
+)
+
+# Query terms that mean the user is looking for an entry-level role.
+ENTRY_QUERY_MARKERS = (
+    "intern", "internship", "new grad", "newgrad", "graduate", "entry",
+    "junior", "jr", "apprentice", "co-op", "coop", "student", "university",
+)
+
+
+def wants_entry_level(terms: list[str]) -> bool:
+    blob = " ".join(terms).lower()
+    return any(m in blob for m in ENTRY_QUERY_MARKERS)
+
+
+def is_senior_title(role: str) -> str | None:
+    r = f" {role.lower()} "
+    for m in SENIOR_MARKERS:
+        if m in r:
+            return m.strip()
+    return None
+
+
 def score(job: Job, terms: list[str], location: str | None) -> None:
     """Rank by how well the title and body match. Title matches dominate.
 
@@ -277,8 +323,8 @@ def score(job: Job, terms: list[str], location: str | None) -> None:
     buried in the benefits section means nothing, so body matches are worth a
     small fraction.
     """
-    title = job.role.lower()
-    body = job.jd_text.lower()
+    title = job.role
+    body = job.jd_text
     matched = []
     total = 0.0
 
@@ -286,10 +332,11 @@ def score(job: Job, terms: list[str], location: str | None) -> None:
         t = t.lower().strip()
         if not t:
             continue
-        if t in title:
+        pat = term_pattern(t)
+        if pat.search(title):
             total += 10.0
             matched.append(t)
-        elif t in body:
+        elif pat.search(body):
             total += 1.0
             matched.append(t)
 
@@ -422,6 +469,19 @@ def collect(terms: list[str], location: str | None, companies: list[str] | None,
         score(j, terms, location)
 
     jobs = [j for j in jobs if j.score > 0]
+
+    # An entry-level search must not return Staff and Senior roles. This is a
+    # separate failure from a weak match: those postings often score well
+    # because they are genuinely about data engineering, and they are still
+    # useless to someone looking for an internship.
+    if wants_entry_level(terms):
+        before = len(jobs)
+        jobs = [j for j in jobs if not is_senior_title(j.role)]
+        if before - len(jobs):
+            notes.append(
+                f"{before - len(jobs)} senior, staff, principal or manager role(s) "
+                f"dropped: the query asks for entry level."
+            )
 
     # Deduplicate. The same role appears on a company board and an aggregator.
     seen, unique = set(), []

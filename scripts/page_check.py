@@ -93,6 +93,25 @@ def analyze(path: Path, slack_in: float = DEFAULT_SLACK_IN) -> dict:
         if not real:
             return {"ok": False, "findings": ["no extractable text"], "pages": n_pages}
 
+        # A trailing page with no text at all. This happens when content runs a
+        # point or two past the bottom margin and LaTeX flushes an empty box
+        # onto a new page. It is invisible while editing and the reader sees a
+        # two-page resume. Checked before anything else, because the fill
+        # measurement below runs on the last page WITH text and would
+        # otherwise report a healthy 100% while the file is two pages long.
+        blank_trailing = 0
+        for p in reversed(per_page):
+            if p is None:
+                blank_trailing += 1
+            else:
+                break
+        if blank_trailing:
+            findings.append(
+                f"{blank_trailing} trailing blank page(s). Content overruns the "
+                f"bottom margin by a hair and pushes an empty page. Tighten "
+                f"slightly until it fits."
+            )
+
         last = real[-1]
         height = last["height"]
 
@@ -108,10 +127,11 @@ def analyze(path: Path, slack_in: float = DEFAULT_SLACK_IN) -> dict:
         writable = bottom_margin_y - top_margin
         fill = (last["bottom"] - top_margin) / writable if writable > 0 else 0.0
 
-        if n_pages > 1 and fill < ORPHAN_FILL:
+        pages_with_text = len(real)
+        if pages_with_text > 1 and fill < ORPHAN_FILL:
             findings.append(
-                f"page {n_pages} is an orphan, {fill:.0%} full. "
-                f"Cut or tighten until it fits on {n_pages - 1}, "
+                f"page {pages_with_text} is an orphan, {fill:.0%} full. "
+                f"Cut or tighten until it fits on {pages_with_text - 1}, "
                 f"or add enough to fill it."
             )
         elif unused > slack:

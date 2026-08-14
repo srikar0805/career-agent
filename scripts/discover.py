@@ -403,7 +403,20 @@ def filter_by_identity(jobs: list[Job], ident: dict) -> tuple[list[Job], list[st
             r"without (the need for |requiring )?(visa support|sponsorship|"
             r"employer sponsorship|visa sponsorship)|"
             r"(work|employment) authorization without sponsorship|"
-            r"not require sponsorship|no visa support)", blob
+            r"not require sponsorship|no visa support|"
+            # The positive-inventory form. JPMorganChase writes "we do not
+            # offer any type of employment-based immigration sponsorship",
+            # which contains none of the phrases above.
+            r"do(es)? not offer .{0,40}sponsorship|"
+            r"not offer(ing)? (any |immigration |visa )*sponsorship|"
+            # An employer refusing to SUPPORT OPT or CPT is a different and
+            # stricter bar than refusing to sponsor. OPT normally needs no
+            # employer sponsorship at all, so a candidate who only screens for
+            # "will not sponsor" reads these postings as open when they are
+            # absolutely closed.
+            r"(not|won.t) (provide|offer|give) any (assistance|support).{0,80}(sponsorship|practical training)|"
+            r"(not|won.t) sign any documentation|"
+            r"optional practical training \(opt\)[^.]{0,40}curricular practical training)", blob
         ):
             dropped_citizenship += 1
             continue

@@ -30,3 +30,7 @@ venv/
 # LaTeX resume sources, personal
 latex/*
 !latex/README.md
+
+# Second git dir tracking profile/, data/ and latex/ into a PRIVATE repo.
+# See scripts/backup.sh. Never let this land in the public history.
+.git-private/

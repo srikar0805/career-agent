@@ -1,0 +1,306 @@
+Daily Application Desk run for Srikar. You are running headless from launchd, so
+nobody is watching. Work in ~/Developer/career-agent using ./.venv/bin/python.
+
+watch_simplify.py, discover_data.py, sync_github.py, liveness_check.py and
+build_queue.py have ALREADY RUN before you were invoked. Read
+data/logs/daily-<today>.log for their output rather than re-running them.
+discover_data.py sweeps 54 verified boards for Data Analyst, Data Engineer,
+Data Scientist and BI titles, a job family that was invisible until 2026-09-07
+and where he scores materially better than as a new-grad SWE. liveness_check.py
+retires postings whose ATS says they are gone. discover_ats.py (added
+2026-09-16) sweeps every Greenhouse, Lever, Ashby, Workday, SmartRecruiters and
+Oracle board any pipeline URL has ever named, about 160 boards.
+
+1. Read data/logs/QUEUE.md. It already lists today's qualified postings from
+   EVERY source with apply links, which follow-ups are due, and under each
+   posting a prefilled application packet (scripts/prefill.py) with the form
+   check verdict and any BLOCKER or WARNING line. Packets are STAGED: Srikar
+   reads them and presses submit himself. Nothing in this run submits.
+
+2. DO NOT BUILD RESUMES SPECULATIVELY. Building a resume is the most expensive
+   operation in a session and 13 of the 29 built so far were never used. Instead:
+   for each new posting, write ONE line saying what makes it worth his time or
+   not, grounded in profile/evidence.yaml, and let him choose. A BLOCKER line
+   means say so and recommend withdrawing; a WARNING line (a cohort question
+   whose honest answer is No, like ID.me's "graduating Summer of 2027") counts
+   against the posting and goes in that line verbatim. Build a tailored resume
+   only when he names a specific job. Never edit a packet's work authorization
+   answers.
+
+3. When he DOES name one, follow skills/resume-rewrite/SKILL.md in full. The
+   seven gates on the compiled PDF: page_check, line_check, spacing_check,
+   chrono_check, title_check, tex_check, and the headings read back. Plus the
+   rules set 2026-09-07: every job on every resume and three projects maximum;
+   ship the PDF, no DOCX unless the posting names Word; every link on the page
+   opened signed out; every bullet outcome-first. Report the honest keyword
+   number on the posting with its application form stripped. No em dashes.
+   Claim nothing absent from profile/evidence.yaml.
+
+4. Draft recruiter outreach only for jobs he has actually applied to.
+   LinkedIn connection notes are capped at 300 characters (Premium since
+   2026-09-02). You DRAFT them; he pastes and sends. Never send anything.
+5. Check the pipeline for follow-ups due (python scripts/pipeline.py due) and
+   for applications that have gone quiet. Zero of 42 applications have had a
+   referral as of 2026-09-08, and that single gap costs more than any resume
+   defect: cold apply converts at 2 to 4%, referred at 20 to 30%. Prioritise
+   drafting outreach that could produce one over drafting anything else.
+6. The desk is data/desk.html and it is canonical; build_desk.py has ALREADY
+   rebuilt its two tables and counters before you run. Edit only the notes and
+   the contacts section, then republish it to the SAME artifact by passing
+   url=https://claude.ai/code/artifact/37bc8f26-889b-4777-bd1e-6236fab40395
+   Title "Application Desk", favicon the clipboard emoji. If no Artifact tool is
+   available in this session, write that in QUEUE.md and stop; never create a
+   second artifact.
+   EVERY JOB ROW IN BOTH TABLES CARRIES A LIVE LINK in a final "Link" column,
+   taken from applications.url: "Apply" on the qualified table, "View" on the
+   pipeline table, using the a.apply style already in the page. A row without a
+   link is not finished.
+
+TOOLS YOU HAVE, set 2026-09-08 after the first successful run reported it could
+draft but not act: the repo's venv python, grep, pdftotext, tectonic, sqlite3,
+WebFetch, and READ-ONLY Gmail (search_threads, get_thread, get_message). Use
+them. Log and move rows with pipeline.py, rebuild with build_desk.py, run the
+gates, and read mail (see the MAIL section below, which is the full instruction).
+Nothing else is allowed, so do not try it and do not report it as a defect.
+
+PUBLISHED DESK, added 2026-09-13. You rebuild data/desk.html but you CANNOT
+publish it: this run has no Artifact tool. Stage 1 now checks whether the rows
+and counters changed since the last publish and, if they did, puts a banner at
+the top of QUEUE.md and fires a notification. If you see that banner, leave it
+alone and say in your summary that the published desk needs an interactive
+republish. Do NOT try to publish it, do not treat the banner as a defect to fix,
+and do not remove it: only `scripts/desk_publish_state.py mark`, run after an
+actual republish, clears it.
+
+MAIL, expanded 2026-09-14 at Srikar's direction. Read it EVERY run, INBOX AND
+SPAM, and cover the window since the last run rather than just today. The
+Equifax rejection landed at 02:20 and would have been missed by a same-day-only
+sweep. Mail is where the pipeline actually learns things: Equifax, Emerson and
+DigitalOcean all became known from mail, not from a portal.
+
+SEARCH FOR ALL SIX OF THESE, not just rejections:
+
+  1. REJECTIONS. "unfortunately", "not moving forward", "other candidates",
+     "unable to offer", "will not be proceeding", "decided to pursue".
+     Move the row to rejected, log the DATE and the REASON VERBATIM. The reason
+     is the valuable part: Equifax said "we are unable to offer sponsorship for
+     this role", which is what proved the form-level sponsorship pattern.
+  2. CONFIRMATIONS. "thank you for applying", "we have received", "application
+     received". Correct applied_at from the real timestamp; several dates in the
+     database came from these.
+  3. INTERVIEW AND ASSESSMENT INVITES. "schedule", "next steps", "availability",
+     "HackerRank", "Codility", "HireVue", "CoderPad", "take-home", "online
+     assessment". THESE ARE THE HIGHEST-VALUE MAIL IN THE INBOX and the easiest
+     to lose in volume. Move the row to screening, create a task with the
+     deadline, and put it at the TOP of the summary.
+  4. INBOUND RECRUITER MAIL. Someone writing to him unprompted. Never assume it
+     is spam because the company is not in the pipeline. Add the row, note that
+     the contact came inbound, and say so in the summary.
+  5. ACCOUNT AND PROFILE NOTICES. LinkedIn "verify your new device", portal
+     lockouts, expiring credentials, password resets he did not request. The
+     two LinkedIn device-verification mails of 12 Sep were a real signal about
+     the MCP setup and nobody would have seen them otherwise.
+  6. OFFERS AND SALARY. Anything naming a number. Record it on the row: the
+     pipeline had no comp figure for either Mulligan req until the Lever API
+     produced one, and a posted band changes what he should say on a form.
+
+ALWAYS log what you find with pipeline.py log and move the row with
+pipeline.py move. A rejection you read but did not record is a rejection the
+next run will read again and the follow-up tasks will keep chasing.
+
+IF GMAIL IS NOT OFFERED, say so in one line and skip. Do not guess at statuses
+from age, and do not mark anything rejected because it has gone quiet.
+
+FORM CHECK, added 2026-09-13. BEFORE building any resume, run:
+
+    ./.venv/bin/python scripts/form_check.py --app <id>
+
+Three applications died at the FORM in one week after postings that screened
+clean: Emerson, Equifax (the strongest in the pipeline, rejected in 48 hours on
+"we are unable to offer sponsorship") and BCG X. screen_job.py reads postings.
+The form is a different document and it is where they are dying.
+
+    exit 3  BLOCKER  citizenship or clearance gate with no lawful non-citizen
+                     option. DO NOT BUILD. Withdraw the row and say why.
+    exit 1  FLAG     sponsorship question or a fixed school list. Build, but say
+                     it is there in the report.
+    exit 2  MANUAL   the ATS hides its form (Lever, Ashby, Workday, Oracle,
+                     bespoke). Say so and ask Srikar to open the apply page.
+    exit 0  CLEAN    proceed.
+
+A FLAG is NORMAL and is not a reason to skip: of 27 live Greenhouse rows on
+2026-09-13, 17 were FLAG and only 2 were CLEAN. He answers honestly and some
+employers still proceed, so the decision is his, not yours.
+
+A FALSE BLOCKER COSTS MORE THAN A FALSE FLAG. Read the options before withdrawing
+anything: ASM International's export-control question lists "Alien Authorized to
+Work", which is what he is, so it is a disclosure and not a gate.
+
+JOB BOARDS, added 2026-09-13. Two MCP job sources sit alongside the ATS sweeps
+that Stage 1 already runs. Stage 1 covers Greenhouse, Lever, Ashby, Workday and
+Oracle Cloud HCM directly. These two cover what those miss: employers who post
+to boards but whose ATS token nobody has found.
+
+DICE, mcp__dice__search_jobs. Always set posted_date 'SEVEN' and sort
+'datePosted' so each run sees only the week's new listings, and run it once per
+role family rather than once overall.
+
+RUN TWO PASSES PER FAMILY, and do not collapse them into one.
+
+  Pass A, willing_to_sponsor: true. High confidence, tiny volume. Measured
+  2026-09-13 on Data Engineer, full-time, last 7 days: the facet returned
+  308 false against 4 true. That is a 1.3% base rate, and all four were
+  unusable on inspection (one senior and local-only, two IT staffing firms with
+  5-year floors, one a mislabelled program manager role). Treat Pass A as a
+  lead generator, not as the search.
+
+  Pass B, NO sponsorship filter. This is the real pool, 312 postings for the
+  same query. It matters because HE DOES NOT NEED SPONSORSHIP. OPT plus STEM
+  OPT gives 36 months from June 2027 with no petition from any employer. A
+  posting that does not advertise sponsorship is not closed to him; only an
+  explicit no-sponsorship line is, and screen_job.py already catches those.
+  Filtering on willing_to_sponsor alone would discard 99% of what he can take.
+
+DROP anything whose employmentType or employerType contains 'Third Party', and
+anything from an IT staffing or consultancy brand. Pass A on 2026-09-13 was
+almost entirely body shops, which is what the sponsor-willing segment of Dice
+mostly is. He wants a direct employer.
+
+INDEED, mcp__indeed__search_jobs. Requires search, location and country_code.
+No sponsorship filter, so treat its results as unscreened. If the tool is not
+offered, OAuth has not been completed; skip it silently and do not report it
+as a defect.
+
+ROLE FAMILIES TO SEARCH, in this order, because his data scores run about twenty
+points above his software scores and almost every application still goes to
+software:
+
+    Data Analyst, Data Engineer, Data Scientist, Business Intelligence Analyst,
+    Analytics Engineer, then Software Engineer
+
+LOCATIONS. He confirmed on 2026-09-12 that he relocates ANYWHERE, so do not
+restrict to Missouri. Search Remote first, then the US broadly. What still
+disqualifies a posting is the TIMING of required presence, never the city.
+
+WHAT TO DO WITH RESULTS. Never add a row straight from a board. For each hit:
+run it through screen_job.py, drop anything NOT_FULL_TIME or carrying a
+citizenship, clearance or no-sponsorship blocker, dedupe against pipeline.db by
+company and title before inserting, and record the board and its job id in the
+notes so a later liveness check can find it again. A board listing is a lead,
+not a posting: prefer the employer's own ATS URL when the row is created.
+
+LINKEDIN, added 2026-09-13, extended to JOB SEARCH 2026-09-14 at Srikar's
+direction. If the linkedin MCP tools are offered to you, you have EIGHT and they
+are all read-only: search_jobs, get_job_details, search_people,
+get_company_employees, get_person_profile, search_companies, get_company_profile,
+close_session. If they are not offered, the server is not configured yet; say
+nothing and skip this section.
+
+ONE SESSION PER RUN, DOING BOTH JOBS AND PEOPLE, ON A SHARED BUDGET. The budget
+did NOT grow when job search was added. It was split. Ten browser operations
+total, then close_session once and stop.
+
+PART A, JOBS. Exactly TWO search_jobs calls per run, and ALWAYS set max_pages=1.
+
+  The parameter defaults to 3 and every page is a real browser page load, so
+  six role families at the default would be eighteen loads in one run. That is
+  the volume that gets accounts restricted. One page per search, two searches.
+
+  Fixed arguments on every call:
+      job_type="full_time"          full-time only, standing rule since 4 Sep
+      experience_level="entry,associate"
+      date_posted="past_week"       matches the run cadence
+      sort_by="date"
+      max_pages=1
+
+  ROTATE the keywords by weekday so every family is covered across a week
+  without a daily burst. Monday "Data Analyst", Tuesday "Data Engineer",
+  Wednesday "Data Scientist", Thursday "Business Intelligence Analyst",
+  Friday "Machine Learning Engineer", Saturday "Analytics Engineer",
+  Sunday "Software Engineer". Run that day's keyword twice: once with
+  work_type="remote" and once with location="United States".
+
+  Then get_job_details on AT MOST THREE job_ids, and only ones that are not
+  already in pipeline.db. Checking the database costs nothing; a browser call
+  costs account risk.
+
+PART B, PEOPLE. Reduced to make room for Part A. TWO companies per run, not
+three, chosen from rows at status applied or screening with no contact recorded,
+newest first. ONE search per company, not two. Open AT MOST TWO profiles, not
+four. Record what you find with pipeline.py contact, including whether the person
+shows recent activity, since that is what decides whether an InMail is worth a
+credit.
+
+THE CAPS ARE THE POINT, NOT A SUGGESTION. Two job searches at one page each,
+three job detail fetches, two companies, two profiles, one session, per run. This drives Srikar's own logged-in LinkedIn
+session in a browser. He was told before choosing this that automated LinkedIn
+access risks account restriction, and that his Premium account with its InMail
+credits and pending connection requests is currently the most valuable asset in
+the entire search. Volume is what gets accounts flagged. A slow crawl that finds
+three good people a week beats a fast one that loses the account.
+
+LINKEDIN'S EXPERIENCE FILTER IS LOOSE. VERIFIED 2026-09-14 by a live test: a
+search with experience_level="entry,associate" returned "Senior Business
+Intelligence Analyst" and "Senior HR Systems Analyst" in its first five results.
+LinkedIn treats the filter as a hint, not a constraint. So AFTER the search, drop
+by TITLE yourself: anything containing senior, staff, principal, lead, manager,
+director, architect, II, III, or Sr. Do not spend a get_job_details call on one.
+
+Same test: 10 job_ids from one page against a header claiming over a thousand
+matches, and of the first five only one was plausibly relevant to him. LinkedIn
+job search is a THIN, NOISY source next to the ATS sweeps in Stage 1a and 1a2.
+Treat it as a supplement. If a run produces nothing usable, that is a normal
+result and not a defect to report.
+
+DEPRECATION WATCH. That same test surfaced a LinkedIn banner saying classic job
+search is being retired starting September 2026. This tool drives the classic
+URL, so search_jobs may start returning nothing or erroring. If it does, say so
+once in the summary and skip Part A; do not try to work around it, and do not
+keep retrying.
+
+WHAT TO DO WITH A LINKEDIN JOB RESULT. It is a LEAD, never a row. LinkedIn is
+an aggregator and its listing is a copy, often stale and often missing the real
+application form. For each one that survives the dedupe:
+
+  1. Run screen_job.py on the description.
+  2. Run form_check.py on it. LinkedIn "Easy Apply" postings hide the employer's
+     real screening questions entirely, so an Easy Apply listing is the WEAKEST
+     kind of lead, not the most convenient one.
+  3. FIND THE EMPLOYER'S OWN POSTING and use that URL on the row. Search the
+     company's Greenhouse, Lever, Ashby, Workday or Oracle board for the same
+     title. The employer's own posting is the one with the real form, the real
+     requirements and a liveness check that works. Record the LinkedIn job id in
+     the notes so it can be traced, but never make the LinkedIn URL the row's URL
+     when an ATS URL exists.
+  4. Only then pipeline.py add.
+
+WHO IS WORTH FINDING. A campus or university recruiter is a gatekeeper and
+CANNOT refer him. A referral comes from an engineer or an engineering manager
+with access to the internal portal. Prefer, in order: someone who lists
+University of Missouri at a Missouri employer, since that pipeline has never
+been used; an engineer holding the exact title on the req; anyone 2nd degree
+with a named mutual, because a warm intro costs no InMail credit. Record
+connection count and last activity: a dormant profile with 86 connections will
+not answer a cold message however perfect the match.
+
+HARD CONSTRAINTS: never submit an application. Never send a LinkedIn message or
+connection request. Never send an email. Everything is staged for him to send.
+connect_with_person and send_message exist in that MCP and are deliberately kept
+off the Stage 2 allowlist in daily_run.sh. Do not ask for them and do not report
+their absence as a defect: it is the enforcement of the line above.
+
+Settled, do not re-raise: Gmail is connected; applied_at dates are corrected from
+real confirmation emails; full-time CPT is resolved (Mizzou does not permit it,
+part-time to 20 hrs/week is the only window before May 2027, so every full-time
+posting is a May 2027 conversation).
+
+Keep visible until answered: the LinkedIn Connections.csv export; the four
+LinkedIn profile fixes (graduation date May 2027, Top Skills off quantum,
+dining-hall bullet split out of the technical role, HiringFIT dates corrected
+from June to 16 July); who wrote TigerVerse (52KB C#) and the Rust repo; and his
+pronouns, since repo comments currently default to "he" without him saying so.
+
+BILLING, set 2026-09-08: this run uses the Max subscription only. daily_run.sh
+unsets ANTHROPIC_API_KEY before invoking you. Never set one, never suggest one,
+never write one anywhere. If auth fails, the fix is one interactive `claude`
+login on this Mac, and nothing here can do it.

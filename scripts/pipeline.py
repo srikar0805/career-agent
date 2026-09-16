@@ -64,6 +64,31 @@ def cmd_add(a) -> int:
         return 2
     conn = _conn()
     ts = now()
+
+    # Duplicate guard. The watcher adds roles automatically, and the same role
+    # then gets added a second time by hand when its link arrives from Srikar.
+    # That is how PayIt #106 and Zip #105 ended up sitting in the open-roles
+    # table after their twins had already been applied to. Match on the
+    # requisition id inside the URL, since the same job is reachable through a
+    # marketing page, a board redirect and a direct link.
+    def _reqkey(u: str) -> str:
+        import re as _re
+        ids = _re.findall(r"\d{6,}", u or "")
+        return ids[-1] if ids else ""
+
+    key = _reqkey(a.url)
+    if key:
+        for row in conn.execute(
+                "SELECT id, company, role, status, url FROM applications"):
+            if _reqkey(row["url"]) == key:
+                print(f"DUPLICATE of #{row['id']}  {row['company']} / "
+                      f"{row['role']}  [{row['status']}]", file=sys.stderr)
+                print("  same requisition id in the URL. Nothing added.",
+                      file=sys.stderr)
+                print(f"  to record progress instead:  pipeline.py move "
+                      f"{row['id']} applied", file=sys.stderr)
+                return 3
+
     try:
         cur = conn.execute(
             """INSERT INTO applications
@@ -112,8 +137,20 @@ def cmd_move(a) -> int:
         (a.id, "status_change", "in" if a.status in TERMINAL else "out",
          f"{row['status']} -> {a.status}", now(), now()),
     )
+    # A task pointing at a dead application is worse than no task: it surfaces in
+    # `due` as work worth doing. On 2026-09-07 task #2 sent Srikar hunting for a
+    # JPMorganChase posting that had been withdrawn as INELIGIBLE a week earlier.
+    dropped = 0
+    if a.status in TERMINAL:
+        cur = conn.execute(
+            """UPDATE tasks SET status='dropped', completed_at=?
+               WHERE application_id=? AND status='open'""", (now(), a.id))
+        dropped = cur.rowcount
+
     conn.commit()
     print(f"#{a.id}  {row['company']} / {row['role']}:  {row['status']} -> {a.status}")
+    if dropped:
+        print(f"  dropped {dropped} open task(s): the application is {a.status}")
     return 0
 
 
@@ -271,6 +308,7 @@ def cmd_due(a) -> int:
            LEFT JOIN applications a ON a.id = t.application_id
            LEFT JOIN contacts c ON c.id = t.contact_id
            WHERE t.status='open' AND t.due_date IS NOT NULL AND t.due_date <= ?
+             AND (t.application_id IS NULL OR a.status NOT IN ('accepted','rejected','withdrawn','ghosted'))
            ORDER BY t.due_date""", (cutoff,)))
     if a.json:
         print(json.dumps(rows, indent=2)); return 0

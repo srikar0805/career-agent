@@ -135,11 +135,26 @@ def experience_blocks(text: str) -> list[str]:
     # Match longest headings first, then discard any match that falls inside
     # one already claimed. Without this, "EXPERIENCE" matches inside
     # "PROFESSIONAL EXPERIENCE" and splits a single heading in two.
+    def is_own_line(i: int, h: str) -> bool:
+        """True when the match at i is a standalone heading, not prose.
+
+        Without this, a resume whose header line reads "1.3 years engineering
+        experience" matches ENGINEERING EXPERIENCE up in the contact block. The
+        region then runs from the header to the first stop heading, contains no
+        dates, and the check reports OUT OF ORDER on a correctly ordered page.
+        A heading owns its whole line; a phrase inside a sentence does not.
+        """
+        line_start = upper.rfind("\n", 0, i) + 1
+        line_end = upper.find("\n", i)
+        if line_end < 0:
+            line_end = len(upper)
+        return not upper[line_start:i].strip() and not upper[i + len(h):line_end].strip()
+
     claimed: list[tuple[int, int]] = []
     for h in sorted(EXPERIENCE_HEADINGS, key=len, reverse=True):
         i = upper.find(h)
         while i >= 0:
-            if not any(a <= i < b for a, b in claimed):
+            if is_own_line(i, h) and not any(a <= i < b for a, b in claimed):
                 claimed.append((i, i + len(h)))
             i = upper.find(h, i + 1)
 
@@ -151,8 +166,11 @@ def experience_blocks(text: str) -> list[str]:
     stop = len(text)
     for h in STOP_HEADINGS:
         i = upper.find(h, begin + 1)
-        if i > 0:
-            stop = min(stop, i)
+        while i > 0:
+            if is_own_line(i, h):
+                stop = min(stop, i)
+                break
+            i = upper.find(h, i + 1)
 
     # Drop any experience heading beyond the stop, for example a "PROJECTS"
     # section that itself contains the word EXPERIENCE in a bullet.

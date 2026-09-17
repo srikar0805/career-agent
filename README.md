@@ -4,6 +4,8 @@ A career operating system for Claude Code. 15 skills and 7 subagents that write 
 
 Covers job search, grad school and research outreach, and freelance client pitching.
 
+**[How the pipeline works](docs/architecture.md)**: the path from a job posting to an application that is ready for you to submit, which model does each step, and the checks each one has to pass.
+
 ---
 
 ## The problem this solves

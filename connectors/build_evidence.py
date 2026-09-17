@@ -49,7 +49,9 @@ EVIDENCE = PROFILE / "evidence.yaml"
 PACKET = RAW / "evidence_packet.md"
 
 REQUIRED_FIELDS = {"id", "action", "sources", "confidence"}
-VALID_CONFIDENCE = {"verified", "approximate", "unverifiable"}
+# asserted-by-srikar: his own word on something no document or repo shows (EV-043, and
+# EV-020's locally measured figures, 2026-09-16). Usable, but the figures are never restated by an agent.
+VALID_CONFIDENCE = {"verified", "approximate", "unverifiable", "asserted-by-srikar"}
 
 # Documents whose full text is worth carrying into the packet. Everything else
 # contributes only its quantified claims.

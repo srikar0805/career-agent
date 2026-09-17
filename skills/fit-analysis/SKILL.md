@@ -20,6 +20,35 @@ REPO="$(cat ~/.claude/career-agent-path)"
 cd "$REPO" && source .venv/bin/activate
 ```
 
+## Run it on Kimi K3 first
+
+Since 2026-09-16, at Srikar's direction, the analysis itself runs on NVIDIA's Kimi
+K3, not in this Claude session. This file is still the specification: the agent
+sends everything from "The analysis" down as its instructions.
+
+```bash
+python scripts/agent_fit.py --app <id> [--resume <pdf>]
+```
+
+It writes `data/artifacts/<slug>/fit_analysis.md` plus `fit_analysis.json`, logs the
+artifact with the paper score, and puts an **Automated checks** line at the top:
+missing sections, weighted arithmetic that does not reproduce the paper score, stage
+probabilities that rise, a forbidden recommendation, and any quoted strength line
+that is on neither the resume nor the posting.
+
+Kimi goes first, and when its analysis fails a check or errors, Nemotron Ultra
+writes it again (NVIDIA, then Ollama). His words, 2026-09-16: "first try with Kimi
+if it fails then fallback to ultra". The header names the model that wrote the
+analysis and lists every attempt. `--applied` and `--ready` run the batch for the
+jobs he applied to and the prepared ones; the Application Desk shows every
+analysis beside its row, because he asked to "look at each fit analysis for each
+job I apply".
+
+Read the file and relay it. Do the analysis inline below only when the agent fails
+(no NVIDIA key, every model down, no pipeline row for a pasted posting), and say
+that it ran inline. When the checks line lists a problem, fix that section before
+relaying it rather than passing a failed check on to Srikar.
+
 Resolve two inputs before anything else.
 
 **The posting.** From a URL, fetch it. From `--app <id>`, read the stored `jd_text` with `pipeline.py show <id> --json`. If the user pasted it, use that. Never analyze against a role title alone; say so and stop.
@@ -119,7 +148,7 @@ and reused. Current state as of 2026-09-07:
 | Referrals | **Zero across 41 applications** | The largest single lever not being used. Cold apply converts at 2 to 4%; a referral converts at 20 to 30% |
 | Publications | None | Costs at research and fellowship reqs specifically |
 | Competitive programming | No signal on the page | Costs at Tier 1, where an online assessment gates the pipeline |
-| Open source | ReproAgent, agent-tab, **4 PRs merged by an external maintainer** | Genuinely above the median and under-used. Several postings ask for it in writing |
+| Open source | ReproAgent, agent-tab, **4 HiringFit PRs the repository owner reviewed** (he merged them himself) | Genuinely above the median and under-used. Several postings ask for it in writing |
 
 **The multiplier.** After computing the weighted fit score, apply these and show
 both numbers. They are blunt on purpose:

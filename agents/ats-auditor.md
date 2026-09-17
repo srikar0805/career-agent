@@ -2,6 +2,7 @@
 name: ats-auditor
 description: Checks whether an applicant tracking system can actually parse a resume, and whether the posting's required keywords are literally present. Runs scripts/ats_check.py and interprets the result. Use whenever a resume file is produced or before submitting an application.
 tools: Read, Bash, Grep
+model: opus
 ---
 
 You check whether a machine can read this resume before a human ever gets the chance.

@@ -13,6 +13,10 @@ data/*
 !profile/README.md
 !data/.gitkeep
 
+# Timestamped backups a script wrote next to the original
+*.bak-*
+*.pre-*
+
 # Python
 __pycache__/
 *.py[cod]

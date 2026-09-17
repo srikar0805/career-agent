@@ -44,9 +44,11 @@ Oracle board any pipeline URL has ever named, about 160 boards.
    referral as of 2026-09-08, and that single gap costs more than any resume
    defect: cold apply converts at 2 to 4%, referred at 20 to 30%. Prioritise
    drafting outreach that could produce one over drafting anything else.
-6. The desk is data/desk.html and it is canonical; build_desk.py has ALREADY
-   rebuilt its two tables and counters before you run. Edit only the notes and
-   the contacts section, then republish it to the SAME artifact by passing
+6. The desk is data/desk.html. Since 2026-09-16 build_desk.py GENERATES THE WHOLE PAGE
+   from the pipeline (applications, fit scores, contacts, agents), so never edit the HTML:
+   anything written into it is overwritten on the next build. Put up to eight short
+   bullet lines for Srikar in data/desk_notes.md, run build_desk.py again, and
+   republish it to the SAME artifact by passing
    url=https://claude.ai/code/artifact/37bc8f26-889b-4777-bd1e-6236fab40395
    Title "Application Desk", favicon the clipboard emoji. If no Artifact tool is
    available in this session, write that in QUEUE.md and stop; never create a
@@ -71,6 +73,13 @@ alone and say in your summary that the published desk needs an interactive
 republish. Do NOT try to publish it, do not treat the banner as a defect to fix,
 and do not remove it: only `scripts/desk_publish_state.py mark`, run after an
 actual republish, clears it.
+
+MAIL NOW RUNS IN STAGE 1 WHEN IT CAN, 2026-09-16. If data/logs/mail-<today>.json
+exists, scripts/agent_mail.py already read INBOX and Spam read-only, triaged job
+mail on NVIDIA and updated the pipeline (rejections only with a matching phrase
+and a single matching application). Read that file and the Mail section of
+QUEUE.md, act only on lines marked NEEDS YOU or "not moved", and do NOT read
+Gmail again. Only when that file is missing, read Gmail yourself as below.
 
 MAIL, expanded 2026-09-14 at Srikar's direction. Read it EVERY run, INBOX AND
 SPAM, and cover the window since the last run rather than just today. The
@@ -136,6 +145,12 @@ A FALSE BLOCKER COSTS MORE THAN A FALSE FLAG. Read the options before withdrawin
 anything: ASM International's export-control question lists "Alien Authorized to
 Work", which is what he is, so it is a disclosure and not a gate.
 
+DICE MOVED TO STAGE 1, 2026-09-16. scripts/agent_boards.py searches Dice from
+Python, filters, and commits survivors with source 'dice'; its output is in the
+daily log under STAGE 1a4. The dice tools are no longer offered to you. The Dice
+paragraphs below stay as the record of how the search is tuned; Indeed, when
+offered, is still yours.
+
 JOB BOARDS, added 2026-09-13. Two MCP job sources sit alongside the ATS sweeps
 that Stage 1 already runs. Stage 1 covers Greenhouse, Lever, Ashby, Workday and
 Oracle Cloud HCM directly. These two cover what those miss: employers who post
@@ -200,7 +215,13 @@ ONE SESSION PER RUN, DOING BOTH JOBS AND PEOPLE, ON A SHARED BUDGET. The budget
 did NOT grow when job search was added. It was split. Ten browser operations
 total, then close_session once and stop.
 
-PART A, JOBS. Exactly TWO search_jobs calls per run, and ALWAYS set max_pages=1.
+PART A MOVED TO STAGE 1, 2026-09-16. The two capped search_jobs calls now run in
+scripts/agent_boards.py --linkedin, which writes data/logs/linkedin-leads-<today>.json.
+search_jobs is no longer offered to you, so the day's cap cannot be spent twice.
+Read that file and apply WHAT TO DO WITH A LINKEDIN JOB RESULT below to its leads
+(get_job_details is still yours for a lead worth tracing). Part B is unchanged.
+
+PART A, JOBS (record of the tuning). Exactly TWO search_jobs calls per run, and ALWAYS set max_pages=1.
 
   The parameter defaults to 3 and every page is a real browser page load, so
   six role families at the default would be eighteen loads in one run. That is
@@ -224,7 +245,11 @@ PART A, JOBS. Exactly TWO search_jobs calls per run, and ALWAYS set max_pages=1.
   already in pipeline.db. Checking the database costs nothing; a browser call
   costs account risk.
 
-PART B, PEOPLE. Reduced to make room for Part A. TWO companies per run, not
+PART B MOVED TO STAGE 1, 2026-09-16. scripts/agent_recruiters.py finds the right recruiters
+(at most 3 companies, one search each) and saves them as contacts; the people tools are no
+longer offered to you. Draft outreach from the contacts table instead (pipeline.py who).
+
+PART B, PEOPLE (record of the old tuning). Reduced to make room for Part A. TWO companies per run, not
 three, chosen from rows at status applied or screening with no contact recorded,
 newest first. ONE search per company, not two. Open AT MOST TWO profiles, not
 four. Record what you find with pipeline.py contact, including whether the person

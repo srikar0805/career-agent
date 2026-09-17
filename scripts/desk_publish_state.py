@@ -35,11 +35,13 @@ STATE = REPO / "data" / ".desk_published.json"
 
 
 def content_hash(path: Path) -> str:
-    """Hash the counters and the table bodies, nothing else."""
+    """Hash the counters, the table bodies and the fit analyses, nothing else."""
     s = path.read_text(encoding="utf-8", errors="replace")
     counters = re.findall(r'<div class="n">(\d+)</div>', s)
     bodies = re.findall(r"<tbody.*?</tbody>", s, re.S)
-    payload = "|".join(counters) + "\n" + "\n".join(bodies)
+    # a rewritten analysis can keep its scores, so its text counts as a change too
+    analyses = re.findall(r'<template class="fa-src".*?</template>', s, re.S)
+    payload = "|".join(counters) + "\n" + "\n".join(bodies) + "\n" + "\n".join(analyses)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

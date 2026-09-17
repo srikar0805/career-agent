@@ -59,8 +59,35 @@ for r in new:
                 out.append(f"  **WARNING** {w[:100]}")
         except Exception as e:
             out.append(f"  packet failed: {type(e).__name__}")
+    # The NVIDIA verdict (scripts/agent_verdict.py), when one ran in Stage 1, so
+    # Stage 2 reads one line per posting instead of the posting itself.
+    try:
+        import json as _json, re as _re
+        vf = ROOT / "data" / "artifacts" / _re.sub(r"[^a-z0-9]+", "-", f"{r[1]}-{r[2]}".lower()).strip("-")[:60] / f"verdict-{r[0]}.json"
+        if vf.exists():
+            v = _json.loads(vf.read_text())
+            out.append(f"  verdict ({v.get('model', '?').split('/')[-1]}): **{v.get('verdict')} {v.get('fit_score')}**  {v.get('one_line', '')}")
+            for b in (v.get("blockers") or [])[:2]:
+                out.append(f"  verdict blocker: {b[:120]}")
+    except Exception:
+        pass
 if not new:
     out.append("_none today_")
+
+# Mail triaged in Stage 1 by scripts/agent_mail.py (NVIDIA, read-only IMAP).
+try:
+    import json as _json
+    mf = ROOT / "data" / "logs" / f"mail-{today}.json"
+    if mf.exists():
+        mail = [m for m in _json.loads(mf.read_text()) if m.get("category") not in (None, "job_alert", "other")]
+        out += ["", f"## Mail: {len(mail)} job email(s) since the last run"]
+        for m in mail:
+            out.append(f"- **{m['category']}** {m.get('company') or m.get('from_domain')}: {m.get('summary', '')[:140]}"
+                       + (f"  _({m['action']})_" if m.get("action") else ""))
+        if not mail:
+            out.append("_nothing that needs you_")
+except Exception as e:
+    print(f"  mail section skipped: {type(e).__name__}")
 
 out += ["", "## Needs a follow-up"]
 any_fu = False

@@ -17,16 +17,17 @@
 
 set -uo pipefail
 
-REPO="/Users/srikarreddy/Developer/career-agent"
+HOME="${HOME:-$(/usr/bin/dscl . -read "/Users/$(/usr/bin/id -un)" NFSHomeDirectory | /usr/bin/cut -d" " -f2)}"
+export HOME
+REPO="${CAREER_AGENT_REPO:-$HOME/Developer/career-agent}"
 PY="$REPO/.venv/bin/python"
-CLAUDE="/Users/srikarreddy/.local/bin/claude"
+CLAUDE="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 LOGDIR="$REPO/data/logs"
 STAMP="$(/bin/date +%Y-%m-%d)"
 LOG="$LOGDIR/daily-$STAMP.log"
 
 # Homebrew for tectonic/pdftotext/gh, plus the user bin for claude.
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/srikarreddy/.local/bin"
-export HOME="/Users/srikarreddy"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin"
 
 /bin/mkdir -p "$LOGDIR"
 exec >>"$LOG" 2>&1
@@ -96,6 +97,28 @@ echo "--- STAGE 1a3: every ATS board the pipeline has seen -----"
 echo "  exit: ${PIPESTATUS[0]}"
 
 echo ""
+echo "--- STAGE 1a4: job boards agent (Dice, LinkedIn capped) ---"
+# Added 2026-09-16: one agent per task, Srikar's request. Dice and the two capped
+# LinkedIn job searches used to run inside the Stage 2 Claude session, which read
+# every result into its context. They run here in Python instead, with the NVIDIA
+# scout only on the few postings that survive the deterministic filters. LinkedIn
+# stays at two searches a day: the account asked to verify a new device twice on
+# 12 Sep. Each agent gets a hard time limit so one slow API cannot stall the run.
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 1800 "$PY" scripts/agent_boards.py --commit --linkedin 2>&1 \
+  | grep -vE "^[[:space:]]*\|" | tail -25
+echo "  exit: ${PIPESTATUS[0]}"
+
+echo ""
+echo "--- STAGE 1a5: recruiter finder (LinkedIn, capped) --------"
+# Added 2026-09-16 at Srikar's request: one agent finds the right recruiter at each company.
+# One LinkedIn people search per company, at most 3 companies, ranked by gpt-oss:120b on
+# Ollama (Qwen was not reachable with his keys). Saved as cold contacts; nobody is messaged.
+# Stage 2 no longer has the LinkedIn people tools, so the daily cap cannot be spent twice.
+/usr/bin/perl -e 'alarm shift; exec @ARGV' 900 "$PY" scripts/agent_recruiters.py --commit 2>&1 \
+  | grep -vE "^[[:space:]]*[│╭╰{]|FastMCP|DeprecationWarning|FunctionTool|transport" | tail -15
+echo "  exit: ${PIPESTATUS[0]}"
+
+echo ""
 echo "--- STAGE 1b: github diff --------------------------------"
 "$PY" scripts/sync_github.py --save
 echo "  exit: $?"
@@ -119,6 +142,43 @@ echo "--- STAGE 1c2: retire dead postings ----------------------"
 # and left alone, because a false positive silently deletes a real opportunity.
 "$PY" scripts/liveness_check.py --workers 8 --commit
 echo "  exit: $?"
+
+echo ""
+echo "--- STAGE 1c3: mail agent (read-only IMAP, NVIDIA triage) --"
+# Moved out of Stage 2 on 2026-09-16. Read-only (EXAMINE + BODY.PEEK, no SMTP);
+# only job mail is sent to NVIDIA, redacted. Skipped until Srikar stores the app
+# password, in which case Stage 2 still reads mail the old way.
+if /usr/bin/security find-generic-password -s gmail-app-password >/dev/null 2>&1; then
+  /usr/bin/perl -e 'alarm shift; exec @ARGV' 900 "$PY" scripts/agent_mail.py --commit 2>&1 | tail -25
+  echo "  exit: ${PIPESTATUS[0]}"
+else
+  echo "  SKIPPED: no gmail-app-password in the keychain"
+fi
+
+echo ""
+echo "--- STAGE 1c4: NVIDIA posting verdicts ---------------------"
+# Only once a model has PASSED the bake-off (scripts/nim_bakeoff.py writes the
+# analyst roster to data/nim_roster.json). On 2026-09-16 the first model tried
+# scored 46% on postings whose answer was already known, and an unmeasured
+# verdict is worse than none, because Stage 2 would trust it.
+if /usr/bin/grep -q '"analyst"' "$REPO/data/nim_roster.json" 2>/dev/null; then
+  /usr/bin/perl -e 'alarm shift; exec @ARGV' 2400 "$PY" scripts/agent_verdict.py --new 2>&1 | tail -40
+  echo "  exit: ${PIPESTATUS[0]}"
+else
+  echo "  SKIPPED: no analyst model has passed nim_bakeoff.py yet"
+fi
+
+echo ""
+echo "--- STAGE 1c5: fit analyses (Kimi, then Ultra) --------------"
+# Srikar, 2026-09-16: "I would also like to look at each fit analysis for each job I
+# apply". Only applications with no passing analysis yet, so most days this is a no-op;
+# the desk shows each one beside its row.
+if /usr/bin/grep -q '"fit"' "$REPO/data/nim_roster.json" 2>/dev/null; then
+  /usr/bin/perl -e 'alarm shift; exec @ARGV' 3600 "$PY" scripts/agent_fit.py --applied 2>&1 | tail -30
+  echo "  exit: ${PIPESTATUS[0]}"
+else
+  echo "  SKIPPED: no fit model in data/nim_roster.json"
+fi
 
 echo ""
 echo "--- STAGE 1d: handoff queue -------------------------------"
@@ -270,22 +330,20 @@ fi
 # NOTE the comments sit ABOVE the command. An earlier edit put them inside the
 # backslash continuation, which commented out the perl alarm and ran claude
 # unwrapped. Keep the command contiguous.
+# CLAUDE MODEL: Opus only, Srikar's rule from 2026-09-16. Without --model this ran on the
+# account default (Fable 5.1 in every Stage 2 transcript that week).
 RC=1
 for ATTEMPT in 1 2 3; do
   OUT="$LOGDIR/stage2-attempt-$ATTEMPT-$STAMP.out"
   /usr/bin/perl -e 'alarm shift; exec @ARGV' 3600 \
-    "$CLAUDE" --print --permission-mode acceptEdits --add-dir "$REPO" \
+    "$CLAUDE" --print --model opus --permission-mode acceptEdits --add-dir "$REPO" \
       --allowedTools \
         "Bash(./.venv/bin/python:*)" "Bash($REPO/.venv/bin/python:*)" \
         "Bash(grep:*)" "Bash(pdftotext:*)" "Bash(tectonic:*)" "Bash(sqlite3:*)" \
         "Bash($REPO/scripts/form_check.py:*)" \
         "WebFetch" \
         "mcp__claude_ai_Gmail__search_threads" "mcp__claude_ai_Gmail__get_thread" "mcp__claude_ai_Gmail__get_message" \
-        "mcp__linkedin__search_people" "mcp__linkedin__get_company_employees" \
-        "mcp__linkedin__get_person_profile" "mcp__linkedin__search_companies" \
-        "mcp__linkedin__get_company_profile" "mcp__linkedin__search_jobs" \
         "mcp__linkedin__get_job_details" "mcp__linkedin__close_session" \
-        "mcp__dice__search_jobs" "mcp__dice__get_job_details" "mcp__dice__get_company" \
         "mcp__indeed__search_jobs" "mcp__indeed__get_job_details" "mcp__indeed__get_company_data" \
       < "$PROMPT" 2>&1 | /usr/bin/tee "$OUT"
   RC=${PIPESTATUS[0]}

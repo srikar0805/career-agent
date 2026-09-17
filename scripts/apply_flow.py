@@ -26,6 +26,7 @@ STOPS, on purpose, before the expensive step: a verdict with blockers, a form
 BLOCKER, or a form WARNING (a cohort question whose honest answer filters him
 out). --force continues past a WARNING or verdict blocker, never past a BLOCKER.
 
+    apply_flow.py --url <job link>          intake the link, then run every step
     apply_flow.py --app 243                 run every step not yet done
     apply_flow.py --app 243 --from keywords re-run from a step
     apply_flow.py --app 243 --only fit      one step
@@ -56,7 +57,7 @@ from agent_verdict import out_path as verdict_file, row, slug   # noqa: E402
 CLAUDE = os.environ.get("CLAUDE_BIN", str(Path.home() / ".local" / "bin" / "claude"))
 RESUMES = Path.home() / "Developer" / "Resumes"
 DB = ROOT / "data" / "pipeline.db"
-STEPS = ["verdict", "form", "resume", "skills", "keywords", "fit", "packet"]
+STEPS = ["verdict", "form", "resume", "skills", "keywords", "fit", "cover", "packet"]
 PY = str(ROOT / ".venv" / "bin" / "python")
 
 
@@ -242,18 +243,43 @@ def step_packet(r: dict, st: dict, force: bool) -> tuple[bool, str]:
     return True, f"packet {path.relative_to(ROOT)}: {info['counts']}"
 
 
+def step_cover(r: dict, st: dict, force: bool) -> tuple[bool, str]:
+    """The cover letter, checked against the resume that was just built (Srikar, 2026-09-17)."""
+    from agent_cover import run as cover_run
+    ok = cover_run(r["id"]) == 0
+    path = artifact(r["id"], "cover_letter")
+    st["cover"] = {"path": path, "ok": ok}
+    return ok, (f"cover letter {Path(path).name}" if ok else "no letter passed its checks; see the log")
+
+
 RUNNERS = {"verdict": step_verdict, "form": step_form, "resume": step_resume, "skills": step_skills,
-           "keywords": step_keywords, "fit": step_fit, "packet": step_packet}
+           "keywords": step_keywords, "fit": step_fit, "cover": step_cover, "packet": step_packet}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--app", type=int, required=True)
+    ap.add_argument("--app", type=int)
+    ap.add_argument("--url", help="a job link: intake it (or find the row it already has) and run the flow")
     ap.add_argument("--from", dest="start", choices=STEPS)
     ap.add_argument("--only", choices=STEPS)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--plan", action="store_true")
     a = ap.parse_args()
+    if not a.app and not a.url:
+        ap.error("give --app or --url")
+    if a.url:
+        out = subprocess.run([PY, str(HERE / "intake_url.py"), a.url, "--json"], capture_output=True, text=True).stdout
+        try:
+            intake = json.loads(out)
+        except Exception:
+            print(out.strip() or "intake failed")
+            return 1
+        if not intake.get("ok"):
+            print(intake.get("why", "intake failed"))
+            return 1
+        a.app = intake["app_id"]
+        print(f"#{a.app} {intake['company']} / {intake['role']}: screen says {intake['verdict']}"
+              + (f"; blockers: {'; '.join(intake['blockers'])}" if intake.get("blockers") else ""))
 
     r = row(a.app)
     sp = state_path(r)

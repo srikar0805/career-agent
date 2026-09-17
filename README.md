@@ -4,7 +4,7 @@ A career operating system for Claude Code. 15 skills and 7 subagents that write 
 
 Covers job search, grad school and research outreach, and freelance client pitching.
 
-It also runs itself. A daily launchd job sweeps 160+ applicant tracking system boards, screens what it finds, builds the resume, writes the fit analysis and the cover letter, fills the form in a real browser and stops at the Submit button. The section below is the whole pipeline; [docs/architecture.md](docs/architecture.md) is the longer version.
+A daily launchd job sweeps 160+ applicant tracking system boards, screens what it finds, scores it and publishes an Application Desk page. You pick a job there and hand over its link; the pipeline then builds that one application end to end: a resume written for that posting, a cover letter, and an answer for every question on the form. You apply. The section below is the whole pipeline; [docs/architecture.md](docs/architecture.md) is the longer version.
 
 ---
 
@@ -72,21 +72,22 @@ Six stages. Stage 1 to 4 need no human; stage 5 is where you press Submit.
 ```mermaid
 flowchart LR
     C["1. Collect<br/>160+ ATS boards"] --> S["2. Screen<br/>rules, then a model"]
-    S --> B["3. Build<br/>resume + 6 PDF gates"]
-    B --> J["4. Judge<br/>fit analysis, letter, packet"]
-    J --> A["5. Apply<br/>form filled, you submit"]
-    A --> F["6. Follow<br/>inbox, recruiters, desk"]
+    S --> D["3. Decide<br/>fit score on the desk"]
+    D -->|you send the link| B["4. Build one application<br/>resume, letter, answers"]
+    B --> F["5. Follow<br/>inbox, recruiters, desk"]
     F -. replies and new evidence .-> C
 ```
+
+Stages 1 to 3 run on their own every morning. Stage 4 runs only for a posting you chose, because a
+resume written for one posting beats a hundred built in advance.
 
 | Stage | What runs | Output |
 |---|---|---|
 | 1. Collect | `watch_simplify.py`, `discover_data.py`, `discover_ats.py`, `agent_boards.py` (Dice, LinkedIn capped), `liveness_check.py` | New postings in the pipeline, dead ones retired |
-| 2. Screen | `screen_job.py` (sponsorship, clearance, years floor, graduation window), `form_check.py` and `prefill.py` read the form first, `agent_verdict.py` scores it | Apply, maybe or skip, with the sentence that decided it |
-| 3. Build | `fast_resume.py` from 17 verified variants, `skills_basis.py`, `agent_bullets.py`, `agent_keywords.py`, then `page_check` `line_check` `spacing_check` `chrono_check` `title_check` `tex_check` | A one-page PDF that passes every gate |
-| 4. Judge | `agent_fit.py`, `agent_cover.py`, `agent_answers.py`, `prefill.py write_packet` | Fit analysis, cover letter, and every form answer in one file |
-| 5. Apply | `apply_next.py` walks the queue; `autofill.py` fills Greenhouse in a real Chrome window and stops | A filled form waiting for you to press Submit |
-| 6. Follow | `agent_mail.py` (read-only), `agent_recruiters.py`, `build_desk.py` | Status moves, recruiter contacts, the Application Desk page |
+| 2. Screen | `screen_job.py` (sponsorship, clearance, years floor, graduation window), `form_check.py` reads the real application form | What would rule him out, before anything is written |
+| 3. Decide | `agent_verdict.py` scores every open posting, `build_desk.py` publishes the Application Desk | A ranked desk with the link to every posting |
+| 4. Build one application | `intake_url.py` takes the link, then `apply_flow.py`: resume (Claude Opus) with `skills_basis.py` and `agent_keywords.py`, six PDF gates, `agent_fit.py`, `agent_cover.py`, `prefill.py` and `agent_answers.py` for the form | A tailored resume, a cover letter and every form answer, ready to send |
+| 5. Follow | `agent_mail.py` (read-only), `agent_recruiters.py`, `build_desk.py` | Status moves, recruiter contacts, an updated desk |
 
 ### Which model does what, and why
 
@@ -97,7 +98,7 @@ flowchart LR
 | Fit analysis | Kimi K3, then Nemotron Ultra | Kimi first; when its analysis fails the automated checks, Ultra rewrites it. |
 | Bullet selection, form answers, cover letters | Ultra, Kimi K3, DeepSeek V4 Flash, Muse Glimmer | Drafting inside hard constraints, every output checked by script. |
 | Boards, inbox triage, recruiter ranking | Nemotron Super, gpt-oss, GLM | Cheap classification over a lot of text. |
-| Resume writing for the best postings | Claude Opus | The one step where judgement about a career is worth the cost. |
+| Writing the resume for a chosen posting | Claude Opus | The one step where judgement about a career is worth the cost, and it now runs once per posting you pick. |
 
 Rosters live in `data/nim_roster.json`, one ordered list per role. `scripts/nim.py` speaks to NVIDIA NIM,
 Google AI Studio and Ollama Cloud through one OpenAI-compatible client, marks a failing model unhealthy
@@ -120,13 +121,13 @@ Every model output passes a deterministic gate before it reaches a page.
 | Bullet edit | A number changed, or an added word is neither an English word nor a technology the bank supports |
 | Bullet selection | A bullet is not character for character one of the fact-traced pool, or sits under the wrong job |
 | Fit analysis | A section is missing, the weighted sub-scores do not reproduce the score, stage probabilities rise, or a quoted line is on neither the resume nor the posting |
-| Cover letter | The hook is not grounded in a real posting sentence, a number is on neither the resume nor the posting, a technology is claimed that is not on the resume, or it claims you live in the employer's city |
+| Cover letter | The hook is not grounded in a real posting sentence, a phrase of ten words is copied from the posting, a number is on neither the resume nor the posting, a technology is claimed that is not on the resume, or it claims you live in the employer's city |
 | Form answer | A number is not from a cited atom, or the answer was truncated |
 
 ### Guardrails
 
-- `autofill.py` has no code path that submits. Its only clicks are on dropdown options, and a guard refuses
-  anything that looks like a submit, apply or send control.
+- Nothing is submitted, and nothing opens a form on your behalf. The browser form filler was retired on
+  2026-09-17: the pipeline hands you a resume, a letter and an answer sheet, and you apply.
 - The mail agent opens the inbox read-only. No email is ever sent.
 - LinkedIn is capped at two job searches and three people searches a day, and never messages or connects.
 - A question that cannot be answered honestly is left blank and marked for you.
@@ -227,8 +228,9 @@ career-agent/
 │   │                          # answers, keywords, boards, recruiters, mail
 │   ├── fast_resume.py         # resume builds from verified variants
 │   ├── *_check.py             # the six PDF gates plus ats_check and style_check
-│   ├── prefill.py autofill.py # form answers, and the filler that never submits
-│   ├── apply_next.py          # one job at a time, end to end
+│   ├── prefill.py             # an answer for every question on the form
+│   ├── intake_url.py          # a job link becomes a pipeline row
+│   ├── apply_flow.py          # one posting, end to end, one agent per step
 │   ├── build_desk.py          # the Application Desk page
 │   └── daily_run.sh           # the launchd run
 ├── skills/                    # 15 skills

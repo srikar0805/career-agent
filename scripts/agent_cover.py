@@ -14,8 +14,8 @@ skills/coverletter/SKILL.md, and everything checkable is checked here rather tha
 Output per application:
   data/artifacts/<slug>/cover-letter-<id>.md     the text
   data/artifacts/<slug>/cover-letter-<id>.pdf    same letterhead as the resume, built with tectonic
-and the PDF is logged as the cover_letter artifact, so prefill marks the form field FILLED and
-autofill.py uploads it. Nothing is ever submitted.
+and the PDF is logged as the cover_letter artifact, so the packet points at it and the form field is
+marked FILLED with the file to attach. Nothing is ever submitted.
 
     agent_cover.py --app 243
     agent_cover.py --ready --limit 20        prepared postings with no letter yet, queue order
@@ -93,7 +93,7 @@ SYSTEM = ("You write one cover letter for one posting, following these instructi
           "graduating May 2027.\n\n" + rules() + """
 
 HARD RULES for this run, checked automatically:
-- 3 or 4 paragraphs, 120 to 200 words in total. No greeting and no sign-off: they are added for you.
+- 3 or 4 paragraphs, 140 to 170 words is the target and 200 is a hard maximum. Count before answering. No greeting and no sign-off: they are added for you.
 - The hook (first sentence) must rest on something the POSTING actually says, and you must return that
   posting sentence verbatim in "hook_source". No fact about the company from anywhere else. Write the
   hook in YOUR OWN words: never copy a phrase of ten or more words from the posting into the letter.
@@ -108,7 +108,7 @@ Reply with ONE JSON object: {"paragraphs": ["...", "..."], "hook_source": "the p
 
 
 def check(paras: list[str], hook_source: str, resume_text: str, posting: str, company: str) -> list[str]:
-    from skills_basis import LEXICON
+    from skills_basis import LEXICON          # used by the location and technology checks below
     problems = []
     body = " ".join(paras)
     words = len(re.findall(r"[A-Za-z0-9'%+-]+", body))
@@ -149,7 +149,8 @@ def check(paras: list[str], hook_source: str, resume_text: str, posting: str, co
     for m in re.finditer(r"(?:based in|live in|living in|located in|i am in|am already|already based|"
                          r"currently in|resident of)\s+([A-Z][\w .&-]{1,30})|\b([A-Z][\w.]{1,20})-based\b", body):
         place = norm(m.group(1) or m.group(2) or "")
-        if place and place not in home and not re.search(r"\bmissouri\b|\bcolumbia\b", place):
+        tech = any(re.search(pat, place, re.I) for _, (_, pat, _) in LEXICON.items())
+        if place and not tech and place not in home and not re.search(r"\bmissouri\b|\bcolumbia\b", place):
             problems.append(f"says he is based in {place}; he lives in {home or 'Columbia, Missouri'} and is open to "
                             f"relocating, so write it as relocating there, never as already living there")
     for key, (display, pattern, _) in LEXICON.items():

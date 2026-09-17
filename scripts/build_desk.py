@@ -265,14 +265,17 @@ def build() -> str:
                 f'<span>{esc(label)}</span></button>' + (f'<div class="why">{esc(rec)}</div>' if rec else ""))
 
     def action(r):
-        if r["tab"] in ("ready", "needs") and r["plat"] == "Greenhouse" and r["rtype"]:
-            cmd = f".venv/bin/python scripts/autofill.py --app {r['id']}"
-            return (f'<button class="copy" type="button" data-cmd="{esc(cmd)}" '
-                    f'aria-label="Copy the form filler command for {esc(r["company"])}">Copy fill command</button>')
+        # Srikar, 2026-09-17: he picks a job here and sends Claude the link, so a row's job is to
+        # hand over that link. The form filler was retired the same day, with bulk preparation.
         if not r.get("url"):
             return ""
-        label = "View" if r["tab"] in ("applied", "process", "closed") else "Apply"
-        return f'<a class="link" href="{esc(r["url"])}" target="_blank" rel="noopener">{label}</a>'
+        label = "View" if r["tab"] in ("applied", "process", "closed") else "Open"
+        link = f'<a class="link" href="{esc(r["url"])}" target="_blank" rel="noopener">{label}</a>'
+        if r["tab"] in ("ready", "needs", "queued"):
+            copy = (f'<button class="copy" type="button" data-cmd="{esc(r["url"])}" '
+                    f'aria-label="Copy the job link for {esc(r["company"])}">Copy link</button> ')
+            return copy + link
+        return link
 
     table_rows = "".join(
         f'<tr data-tab="{r["tab"]}" data-q="{esc((r["company"] + " " + r["role"] + " " + r["plat"]).lower())}">'
@@ -374,12 +377,12 @@ def build() -> str:
         ("Discovery", "Simplify feed, 54 data boards, 160+ ATS boards", "Python, no model", "daily"),
         ("Job boards", "Dice, and LinkedIn at 2 searches a day", model("scout"), "daily"),
         ("Posting verdicts", "fit score, blockers, missing keywords", model("analyst"), calls("verdict")),
-        ("Resumes", "fast build from verified variants; full build for the top ten", "Python, then Claude Opus", "per posting"),
+        ("Resumes", "one posting at a time, from the link you send", "Claude Opus", "on request"),
         ("Skills section", "every posting technology you have used", "Python, no model", "every build"),
         ("Bullet keywords", "evidence-backed edits, every PDF check rerun", model("writer"), calls("keywords")),
         ("Fit analysis", "the fit-analysis skill; Kimi first, Ultra when Kimi fails the checks", model("fit"), calls("fit analysis")),
-        ("Packets", "every form answer, open-ended answers drafted", model("writer"), "every build"),
-        ("Form filler", "fills Greenhouse, stops before Submit", "Playwright, no model", "you run it"),
+        ("Packets", "every form answer, open-ended answers drafted", model("writer"), "per posting"),
+        ("Cover letters", "hook from the posting, every number checked", model("writer"), calls("cover letter")),
         ("Mail triage", "rejections and interview requests logged", model("triage"), "daily"),
         ("Recruiter finder", "the right recruiter at each company", model("recruiter"), calls("recruiters")),
     ]
@@ -654,7 +657,7 @@ dialog.fa::backdrop{background:rgba(10,18,14,.46)}
         <thead><tr><th>#</th><th>Position</th><th>Fit</th><th>Analysis</th><th>Platform</th><th>Resume</th><th>Status</th><th>Updated</th><th><span class="vh">Action</span></th></tr></thead>
         <tbody>{{ROWS}}</tbody>
       </table></div>
-      <p class="foot-note">Copy a fill command and run it in <code>~/Developer/career-agent</code>. Chrome opens the form filled in; you review it and press Submit.</p>
+      <p class="foot-note">Copy a job link and send it to Claude. It builds the resume, the cover letter and the answers to that posting’s questions, and you apply.</p>
     </section>
     <section id="pipeline" class="board" aria-label="Pipeline">{{BOARD}}</section>
     <div class="twocol">
@@ -706,7 +709,7 @@ dialog.fa::backdrop{background:rgba(10,18,14,.46)}
     try { await navigator.clipboard.writeText(cmd); b.textContent = 'Copied'; }
     catch (e) { window.prompt('Copy this command:', cmd); b.textContent = 'Shown'; }
     b.classList.add('done');
-    setTimeout(() => { b.textContent = 'Copy fill command'; b.classList.remove('done'); }, 2200);
+    setTimeout(() => { b.textContent = 'Copy link'; b.classList.remove('done'); }, 2200);
   }));
   const dlg = document.getElementById('fa');
   const body = document.getElementById('fa-body');

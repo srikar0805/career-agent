@@ -38,10 +38,9 @@ flowchart TD
         D3[agent_cover.py<br/>cover letter, checked]
         D4[prefill.py write_packet<br/>every form answer, one file]
     end
-    subgraph apply["5. Apply, he presses Submit"]
-        E1[apply_next.py<br/>one job at a time]
-        E2[autofill.py<br/>Playwright fills Greenhouse, never submits]
-        E3[pipeline.py move applied]
+    subgraph apply["5. Hand over"]
+        E1[the packet, the resume and the letter]
+        E2[he applies himself]
     end
     subgraph after["6. After it goes out"]
         F1[agent_mail.py<br/>read-only IMAP triage]
@@ -115,8 +114,8 @@ person's data.
 
 ## Guardrails
 
-- `autofill.py` has no code path that submits. Its only clicks are on dropdown options, and a guard
-  refuses any element that looks like a submit, apply or send control.
+- Nothing submits and nothing types into an employer's form. The Playwright form filler was retired on
+  2026-09-17 with bulk preparation; the pipeline hands over a resume, a letter and an answer sheet.
 - No email is ever sent: the mail agent opens the mailbox read-only (`EXAMINE`, `BODY.PEEK`).
 - LinkedIn is capped at two job searches and three people searches a day, and never messages or
   connects with anyone.

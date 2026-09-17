@@ -87,6 +87,16 @@ def pool(exclude_base: str) -> tuple[dict, dict]:
         if l.startswith(r"\item") and where and not hold:
             comment = lines[i + 1] if i + 1 < len(lines) and lines[i + 1].lstrip().startswith("%") else ""
             add(l, comment, where, "library")
+    # Project HEADERS are titles and links, not claims, so take them from every variant including the
+    # pre-rewrite copies: SIG wanted GraphNet-Sentry, whose header left the pool when Deeter was rewritten.
+    for f in sorted(RES.glob("Srikar_Resume_*/main*.tex")):
+        if f.parent.name == exclude_base:
+            continue
+        for kind, head, _ in BLOCK.findall(f.read_text()):
+            if kind == "customItem":
+                m = re.search(r"title=(.*?),\s*\n", head + "\n")
+                if m:
+                    headers.setdefault("project:" + project_key(m.group(1)), "\\customItem[" + head + "\n    ]")
     for d in sorted(RES.glob("Srikar_Resume_*/main.pre-bullets.tex")):
         base = d.parent
         if base.name == exclude_base or not (base / "main.tex").exists():

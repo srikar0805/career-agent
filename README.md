@@ -70,40 +70,23 @@ Every outbound document is attacked in parallel before you see it:
 Six stages. Stage 1 to 4 need no human; stage 5 is where you press Submit.
 
 ```mermaid
-flowchart TD
-    subgraph collect["1 - Collect, no model"]
-        A1[watch_simplify.py, discover_data.py, discover_ats.py<br/>160+ ATS boards]
-        A2[agent_boards.py<br/>Dice, LinkedIn capped at 2 searches a day]
-        A3[liveness_check.py<br/>retire dead postings]
-    end
-    subgraph screen["2 - Screen before building anything"]
-        B1[screen_job.py<br/>sponsorship, clearance, years floor, graduation window]
-        B2[form_check.py, prefill.py<br/>read the application form first]
-        B3[agent_verdict.py<br/>fit score, blockers, missing keywords]
-    end
-    subgraph build["3 - Build the page"]
-        C1[fast_resume.py<br/>17 verified base variants]
-        C2[skills_basis.py<br/>every posting technology you have used]
-        C3[agent_keywords.py, agent_bullets.py<br/>evidence-backed edits and selection]
-        C4[6 PDF gates<br/>page, line, spacing, chrono, title, tex]
-    end
-    subgraph judge["4 - Judge and prepare"]
-        D1[agent_fit.py<br/>fit analysis, checked]
-        D2[agent_cover.py<br/>cover letter, checked]
-        D3[agent_answers.py, prefill.py<br/>every form answer in one packet]
-    end
-    subgraph apply["5 - Apply, you press Submit"]
-        E1[apply_next.py<br/>one job at a time]
-        E2[autofill.py<br/>fills Greenhouse in Chrome, never submits]
-    end
-    subgraph after["6 - After it goes out"]
-        F1[agent_mail.py<br/>read-only inbox triage]
-        F2[agent_recruiters.py<br/>the right recruiter per company]
-        F3[build_desk.py<br/>the Application Desk page]
-    end
-    collect --> screen --> build --> judge --> apply --> after
-    after -. replies, follow-ups, new evidence .-> collect
+flowchart LR
+    C["1. Collect<br/>160+ ATS boards"] --> S["2. Screen<br/>rules, then a model"]
+    S --> B["3. Build<br/>resume + 6 PDF gates"]
+    B --> J["4. Judge<br/>fit analysis, letter, packet"]
+    J --> A["5. Apply<br/>form filled, you submit"]
+    A --> F["6. Follow<br/>inbox, recruiters, desk"]
+    F -. replies and new evidence .-> C
 ```
+
+| Stage | What runs | Output |
+|---|---|---|
+| 1. Collect | `watch_simplify.py`, `discover_data.py`, `discover_ats.py`, `agent_boards.py` (Dice, LinkedIn capped), `liveness_check.py` | New postings in the pipeline, dead ones retired |
+| 2. Screen | `screen_job.py` (sponsorship, clearance, years floor, graduation window), `form_check.py` and `prefill.py` read the form first, `agent_verdict.py` scores it | Apply, maybe or skip, with the sentence that decided it |
+| 3. Build | `fast_resume.py` from 17 verified variants, `skills_basis.py`, `agent_bullets.py`, `agent_keywords.py`, then `page_check` `line_check` `spacing_check` `chrono_check` `title_check` `tex_check` | A one-page PDF that passes every gate |
+| 4. Judge | `agent_fit.py`, `agent_cover.py`, `agent_answers.py`, `prefill.py write_packet` | Fit analysis, cover letter, and every form answer in one file |
+| 5. Apply | `apply_next.py` walks the queue; `autofill.py` fills Greenhouse in a real Chrome window and stops | A filled form waiting for you to press Submit |
+| 6. Follow | `agent_mail.py` (read-only), `agent_recruiters.py`, `build_desk.py` | Status moves, recruiter contacts, the Application Desk page |
 
 ### Which model does what, and why
 

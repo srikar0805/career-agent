@@ -4,7 +4,7 @@ A career operating system for Claude Code. 15 skills and 7 subagents that write 
 
 Covers job search, grad school and research outreach, and freelance client pitching.
 
-**[How the pipeline works](docs/architecture.md)**: the path from a job posting to an application that is ready for you to submit, which model does each step, and the checks each one has to pass.
+It also runs itself. A daily launchd job sweeps 160+ applicant tracking system boards, screens what it finds, builds the resume, writes the fit analysis and the cover letter, fills the form in a real browser and stops at the Submit button. The section below is the whole pipeline; [docs/architecture.md](docs/architecture.md) is the longer version.
 
 ---
 
@@ -62,6 +62,92 @@ Every outbound document is attacked in parallel before you see it:
 | `jd-analyst` | Decodes a posting into ranked must-haves and the unstated problem behind the req. |
 | `company-researcher` | Finds one specific sourced fact. Refuses to return anything without a URL. |
 | `interview-panel` | Hiring manager, peer engineer, and bar raiser, independently. |
+
+---
+
+## Architecture
+
+Six stages. Stage 1 to 4 need no human; stage 5 is where you press Submit.
+
+```mermaid
+flowchart TD
+    subgraph collect["1 - Collect, no model"]
+        A1[watch_simplify.py, discover_data.py, discover_ats.py<br/>160+ ATS boards]
+        A2[agent_boards.py<br/>Dice, LinkedIn capped at 2 searches a day]
+        A3[liveness_check.py<br/>retire dead postings]
+    end
+    subgraph screen["2 - Screen before building anything"]
+        B1[screen_job.py<br/>sponsorship, clearance, years floor, graduation window]
+        B2[form_check.py, prefill.py<br/>read the application form first]
+        B3[agent_verdict.py<br/>fit score, blockers, missing keywords]
+    end
+    subgraph build["3 - Build the page"]
+        C1[fast_resume.py<br/>17 verified base variants]
+        C2[skills_basis.py<br/>every posting technology you have used]
+        C3[agent_keywords.py, agent_bullets.py<br/>evidence-backed edits and selection]
+        C4[6 PDF gates<br/>page, line, spacing, chrono, title, tex]
+    end
+    subgraph judge["4 - Judge and prepare"]
+        D1[agent_fit.py<br/>fit analysis, checked]
+        D2[agent_cover.py<br/>cover letter, checked]
+        D3[agent_answers.py, prefill.py<br/>every form answer in one packet]
+    end
+    subgraph apply["5 - Apply, you press Submit"]
+        E1[apply_next.py<br/>one job at a time]
+        E2[autofill.py<br/>fills Greenhouse in Chrome, never submits]
+    end
+    subgraph after["6 - After it goes out"]
+        F1[agent_mail.py<br/>read-only inbox triage]
+        F2[agent_recruiters.py<br/>the right recruiter per company]
+        F3[build_desk.py<br/>the Application Desk page]
+    end
+    collect --> screen --> build --> judge --> apply --> after
+    after -. replies, follow-ups, new evidence .-> collect
+```
+
+### Which model does what, and why
+
+| Job | Runs on | Why |
+|---|---|---|
+| Discovery, liveness, skills line, packets, exports | Python only | Deterministic. A model adds cost and risk, not accuracy. |
+| Posting verdicts | Nemotron Ultra | Picked by a bake-off on postings whose answer was already known: Ultra 13/13, Gemini 3.5 Flash 91%, gpt-oss-20b 73%, Nemotron Super 54%. |
+| Fit analysis | Kimi K3, then Nemotron Ultra | Kimi first; when its analysis fails the automated checks, Ultra rewrites it. |
+| Bullet selection, form answers, cover letters | Ultra, Kimi K3, DeepSeek V4 Flash, Muse Glimmer | Drafting inside hard constraints, every output checked by script. |
+| Boards, inbox triage, recruiter ranking | Nemotron Super, gpt-oss, GLM | Cheap classification over a lot of text. |
+| Resume writing for the best postings | Claude Opus | The one step where judgement about a career is worth the cost. |
+
+Rosters live in `data/nim_roster.json`, one ordered list per role. `scripts/nim.py` speaks to NVIDIA NIM,
+Google AI Studio and Ollama Cloud through one OpenAI-compatible client, marks a failing model unhealthy
+for six hours and logs every call. Keys come from the macOS keychain, never from a file. Gemini is barred
+from inbox and recruiter data because its free tier may train on prompts.
+
+### What a hosted model is allowed to see
+
+`scripts/nim_profile.py` builds the only profile that leaves the machine: no contact details, no private
+notes, no unverifiable atoms, and any figure that came from a resume rather than a repository is masked as
+`[figure withheld]`. A model cannot restate a number nobody has verified.
+
+### The checks that make cheap models usable
+
+Every model output passes a deterministic gate before it reaches a page.
+
+| Output | Rejected when |
+|---|---|
+| Resume PDF | The page is not full, a bullet ends in a runt line, spacing varies, dates are out of order, a title does not match `titles.yaml`, or the text is not extractable |
+| Bullet edit | A number changed, or an added word is neither an English word nor a technology the bank supports |
+| Bullet selection | A bullet is not character for character one of the fact-traced pool, or sits under the wrong job |
+| Fit analysis | A section is missing, the weighted sub-scores do not reproduce the score, stage probabilities rise, or a quoted line is on neither the resume nor the posting |
+| Cover letter | The hook is not grounded in a real posting sentence, a number is on neither the resume nor the posting, a technology is claimed that is not on the resume, or it claims you live in the employer's city |
+| Form answer | A number is not from a cited atom, or the answer was truncated |
+
+### Guardrails
+
+- `autofill.py` has no code path that submits. Its only clicks are on dropdown options, and a guard refuses
+  anything that looks like a submit, apply or send control.
+- The mail agent opens the inbox read-only. No email is ever sent.
+- LinkedIn is capped at two job searches and three people searches a day, and never messages or connects.
+- A question that cannot be answered honestly is left blank and marked for you.
+- A claim you have not confirmed is held in the bank as `needs_confirmation` and kept off every page.
 
 ---
 
@@ -149,8 +235,19 @@ To include LinkedIn: go to LinkedIn, Settings, Data Privacy, Get a copy of your 
 career-agent/
 ├── install.sh                 # venv, deps, gh, symlinks, db
 ├── connectors/                # github.py  linkedin.py  docs.py  build_evidence.py
-├── scripts/                   # pipeline.py  ats_check.py  render.py  discover.py
-│                              # ingest.py  style_check.py  db.py
+├── docs/architecture.md       # the pipeline, end to end
+├── scripts/
+│   ├── pipeline.py            # the SQLite CRM behind everything
+│   ├── discover_*.py          # board sweeps, liveness, screening
+│   ├── nim.py nim_profile.py  # hosted-model client and the profile it may see
+│   ├── agent_*.py             # one agent per task: verdict, fit, bullets, cover,
+│   │                          # answers, keywords, boards, recruiters, mail
+│   ├── fast_resume.py         # resume builds from verified variants
+│   ├── *_check.py             # the six PDF gates plus ats_check and style_check
+│   ├── prefill.py autofill.py # form answers, and the filler that never submits
+│   ├── apply_next.py          # one job at a time, end to end
+│   ├── build_desk.py          # the Application Desk page
+│   └── daily_run.sh           # the launchd run
 ├── skills/                    # 15 skills
 ├── agents/                    # 7 subagents
 ├── templates/                 # style-rules.md  rubric-resume.md

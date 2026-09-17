@@ -145,7 +145,7 @@ email | phone | github.com/user | linkedin.com/in/user | City, Country
 ### Degree | Institution | Location | Years
 
 ## Skills
-Comma separated, every one backed by a bullet above.
+Comma separated: every technology the posting names that he has used (scripts/skills_basis.py), whether or not a bullet shows it.
 ```
 
 Writing rules, on top of `templates/style-rules.md`:
@@ -386,8 +386,9 @@ that govern what goes ON the page.
 
 - **No em dashes, anywhere, ever.** Hard style rule across everything written for Srikar, enforced by `style_check.py`. Use a comma, a colon or a full stop. It is also an AI tell that recruiters screen for.
 - Never invent a metric. Not once, not as a placeholder that looks real. Use `[NEED: throughput before and after]` and ask.
-- Never add a skill to the skills section that no bullet demonstrates.
-- Never claim a technology absent from `profile/skills.yaml`.
+- **Skills section: every technology the posting names that he has used, bullet or no bullet.** Srikar's rule, 2026-09-16. "Used" means `profile/skills.yaml` at any level except `unbacked`, or the `tech` list of any evidence atom. `scripts/skills_basis.py --app <id> --tex <main.tex> --apply` does this after the build and re-runs the PDF gates; run it rather than hand-picking. A bullet is no longer required for a skills-line entry. The old rule ("never add a skill no bullet demonstrates") is retired for the skills line only.
+- Never write a technology he has **no record of using** anywhere, skills line included. `skills_basis.py` prints those as CONFIRM; report them to him, and when he says he has used one, add it to `profile/skills.yaml` as `asserted-by-srikar` so every later resume picks it up. Forms make him certify the resume is accurate.
+- **Experience, projects and education stay strict**: every bullet traces to an evidence id, exactly as before.
 - If the user asks you to add something the evidence does not support, say what the evidence supports instead and let them decide. Do not silently comply and do not refuse; give them the accurate version and the choice.
 - Work authorization is stated honestly when the posting or form asks. Never obscure it.
 - **Full-time roles only**, as of 2026-09-04. No internships, co-ops, part-time, apprenticeships or summer analyst programmes. `NOT_FULL_TIME` in `screen_job.py` drops them at the title stage before any fetch.

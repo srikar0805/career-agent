@@ -324,10 +324,15 @@ def answer(q: dict, row: dict, prev: dict | None = None) -> dict:
                    "optional, skip" if not res["required"] else "required: run /coverletter")
 
     # checked before consents: Capco's non-compete question says "agreement"
-    if re.search(r"non-?compete|restrictive\s+covenant", L):
-        return put("", "NEEDS YOU", val(pe["non_compete"])[2])
-    if re.search(r"accommodat", L):
-        return put("", "DECISION", "whether you need an accommodation is yours to say")
+    if re.search(r"non-?compete|restrictive\s+covenant|non-?solicit", L):
+        v, st, note = val(pe["non_compete"])
+        if re.search(r"non-?disclosure|confidential", L):   # he answered for non-competes; an NDA is common
+            return put(v, "CONFIRM", note + "; this question also names NDAs or confidentiality agreements, which most "
+                       "employers have you sign: No is right only if none of them restricts where you can work")
+        return put(v, st, note)
+    if re.search(r"accommodat|reasonable\s+adjustment", L):
+        v, st, note = val(pe.get("accommodations", {"decision": True}))
+        return put(v, st, note)
 
     # consents are agreements: never pre-selected. Judge by the opening of the
     # label and by the options, because C3.ai's 2,500-character privacy notice
@@ -467,11 +472,19 @@ def answer(q: dict, row: dict, prev: dict | None = None) -> dict:
         return put(pe["over_18"])
 
     # experience and identity
-    m = re.search(r"(more\s+than|at\s+least|over|minimum\s+(?:of\s+)?|greater\s+than)\s+(\d+)\+?\s+years?", L)
-    if m and yes_no and re.search(r"(full[-\s]?time|professional|work|industry)\s+(work\s+)?experience", L):
+    m = re.search(r"(more\s+than|at\s+least|over|minimum\s+(?:of\s+)?|greater\s+than)\s+(\d+)\s*\+?\s*(?:plus\s+)?years?", L) \
+        or re.search(r"(\b)(\d+)\s*(?:\+|plus)\s*years?", L)                     # "3+ years of SQL" means at least 3
+    if m and yes_no and re.search(r"experience", L):
         n, have = int(m.group(2)), ex["full_time_months"] / 12
-        ok = have > n if m.group(1).startswith(("more", "over", "greater")) else have >= n
-        return put("Yes" if ok else "No", "FILLED", f"{ex['full_time_months']} months full-time, excluding internships")
+        ok = have > n if (m.group(1) or "").startswith(("more", "over", "greater")) else have >= n
+        generic = re.search(r"(full[-\s]?time|professional|work|industry)\s+(work\s+)?experience", L)
+        if generic or not ok:
+            # Capco, 2026-09-16: "at least 2 plus years of Technical Business Analyst experience?" was left
+            # blank. 13 months of full-time work in total cannot contain 2 years of any one kind, so the
+            # honest answer is No whatever the specialism. A Yes still needs the specialism checked.
+            res["warn"] = not ok and bool(res["required"])
+            return put("Yes" if ok else "No", "FILLED", f"{ex['full_time_months']} months full-time in total, excluding internships"
+                       + ("; a required experience floor he does not meet usually filters" if not ok else ""))
     if re.search(r"how\s+many.{0,40}(internship|co-?op)", L):
         return put(ex["internships_completed"], "FILLED", "SP Software 2024 and HiringFIT 2023, both software")
     if re.search(r"how\s+many\s+years|years\s+of\s+.{0,40}experience", L):
@@ -632,6 +645,7 @@ def build(row: dict) -> tuple[str, dict]:
         L.append(f"   {r['status']}" + (f": {r['note']}" if r["note"] else ""))
         L.append("")
     info = {"counts": counts, "verdict": verdict, "readable": readable,
+            "rows": [{k: x[k] for k in ("label", "required", "type", "status", "answer")} for x in rows],
             "blockers": list(findings.get("hard", [])),
             "warnings": [r["label"] for r in rows if r["warn"]],
             # questions only: an unbuilt resume is expected at queue time, not a gap

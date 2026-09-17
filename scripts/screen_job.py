@@ -71,9 +71,14 @@ def fetch_jd(url: str) -> str:
         m = re.search(r"jobs\.lever\.co/([\w-]+)/([0-9a-f-]{36})", url)
         if m:
             d = json.loads(_get(f"https://api.lever.co/v0/postings/{m[1]}/{m[2]}"))
+            # `additional` is where Lever employers put the EEO and work-authorization
+            # paragraph. Without it Callan #259's "unable to sponsor or take over
+            # sponsorship" was invisible to this screener (found 2026-09-16); the
+            # 12 Sep withdrawal only happened because Stage 2 read the page itself.
             return _detag(d.get("description", "") + " " +
                           " ".join(s.get("text", "") + " " + s.get("content", "")
-                                   for s in d.get("lists", []) or []))
+                                   for s in d.get("lists", []) or []) + " " +
+                          d.get("additional", ""))
 
         m = re.search(r"([\w-]+)\.bamboohr\.com/careers/(\d+)", url)
         if m:
@@ -90,7 +95,7 @@ def fetch_jd(url: str) -> str:
 
 CITIZEN = re.compile(
     r"(u\.?s\.?\s*citizen(ship)?\s*(is\s*)?(require|only|mandat)|must be a u\.?s\.? citizen"
-    r"|security clearance|active clearance|secret clearance|ts/sci|\bitar\b|export[- ]control"
+    r"|security clearance|active clearance|secret clearance|\bts/sci\b|\bitar\b|export[- ]control"
     r"|public trust|dod clearance|government clearance)", re.I)
 
 # Sanofi 2026-08-21 slipped through and it should not have. Two failures:

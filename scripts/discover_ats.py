@@ -114,6 +114,13 @@ BARE_WRONG_YEAR = re.compile(r"(grad\w*|class\s+of|cohort)\D{0,12}20(2[4-6]|2[89
                              r"|\b20(2[4-6]|2[89])\D{0,12}(new\s+grad|grad\w*|cohort)", re.I)
 
 
+# The TITLE is narrower than the posting often enough to matter: Applied Intuition
+# #304 is titled "(December 2026)" and its body says "graduating December 2026 or
+# by Summer 2027". It was withdrawn on the title on 2026-09-16 and restored the
+# same day. So a title mismatch only marks the posting; the body decides.
+BODY_ALLOWS_MAY_2027 = re.compile(r"\b(may|june?|spring|summer)\s*(?:/\s*(?:june?|may)\s*)?(?:of\s+)?,?\s*'?(?:20)?27\b", re.I)
+
+
 def grad_window_ok(title: str) -> bool:
     for mon, yr in GRAD_WINDOW.findall(title):
         if (mon.lower(), yr) not in GRAD_WINDOW_OK:
@@ -317,8 +324,6 @@ def title_ok(r: dict) -> tuple[bool, str]:
         return False, "outside the US"
     if LANGUAGE_ROLE.search(t):
         return False, "requires another language"
-    if not grad_window_ok(t):
-        return False, "graduation window is not May 2027"
     tl = f" {t.lower()} "
     for m in SENIOR_MARKERS:
         if m in tl:
@@ -529,7 +534,7 @@ def sweep(reg: dict[str, dict], commit: bool, limit: int, workers: int,
     # board's candidates, then take one from every board per round.
     def score(r: dict) -> int:
         t = r["title"]
-        s = 0
+        s = 0 if grad_window_ok(t) else -6          # read last; the body may still accept May 2027
         if LEVEL.search(t):
             s += 5
         if DATA_TITLE.search(t):
@@ -552,6 +557,9 @@ def sweep(reg: dict[str, dict], commit: bool, limit: int, workers: int,
         key = posting_key(r["url"])
         if drop:
             seen[key] = {"at": stamp, "why": drop}
+            continue
+        if not grad_window_ok(r["title"]) and not BODY_ALLOWS_MAY_2027.search(text or ""):
+            seen[key] = {"at": stamp, "why": "graduation window is not May 2027 (title and posting agree)"}
             continue
         v = screen(text, r["company"])
         if v["verdict"] == "PASS":

@@ -107,7 +107,10 @@ This had drifted badly. The Deeter, SIG, Point72 and StudyFetch pages each ran
 three employers and four or five projects, because HiringFIT is one month in 2023
 on a React dashboard and it kept losing to a better-matched repository. That was
 the wrong trade. HiringFIT is employment, it is corroborated by 4 pull requests
-an external maintainer merged, and it closes the 2023 stretch of the timeline.
+in the company repository, and it closes the 2023 stretch of the timeline.
+(Corrected 2026-09-16: he merged the four himself and GitHub records no review;
+the repository owner reviewed them off GitHub. Write "the repository owner
+reviewed before merge", never "an external maintainer reviewed and merged".)
 
 **The order of what to cut when the page is over**, top of the list first:
 
